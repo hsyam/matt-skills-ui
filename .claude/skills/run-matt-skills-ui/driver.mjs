@@ -2,7 +2,8 @@
 // Driver for matt-skills-ui. Runs the real server against a throwaway copy of the fixture repo,
 // with an isolated data dir, and exercises it over HTTP + the CLI. Paths are relative to the plugin root.
 //   node .claude/skills/run-matt-skills-ui/driver.mjs smoke [--keep] [--shots]   API + CLI checks (free)
-//   node .claude/skills/run-matt-skills-ui/driver.mjs spawn                      + a real headless claude agent (haiku, ~$0.10)
+//   node .claude/skills/run-matt-skills-ui/driver.mjs spawn [--agent <id>]       + a real headless agent, read-only (claude: haiku, ~$0.10;
+//                                                                                  or opencode | codex | cursor | gemini | pi)
 //   node .claude/skills/run-matt-skills-ui/driver.mjs up [--repo <dir>]          start a board and print its URL
 //   node .claude/skills/run-matt-skills-ui/driver.mjs shot <url> [out.png] [--theme swiss|terminal|transit|toybox] [--size 1440,900]
 //   node .claude/skills/run-matt-skills-ui/driver.mjs down                       stop every board started by the driver
@@ -97,14 +98,15 @@ async function smoke({ keep, shots, withSpawn } = {}) {
   cli('theme', 'default', '--repo', repo);
 
   if (withSpawn) {
-    const r = await api(sj, '/api/spawn', { prompt: 'Read .scratch/gift-cards/spec.md, then ask me one question about it using the QUESTION/RECOMMENDED/OPTIONS format. Do not edit files.', mode: 'plan', model: 'haiku', name: 'driver probe' });
+    const agent = typeof opt('agent') === 'string' ? opt('agent') : 'claude', READ_ONLY = { claude: 'plan', opencode: 'plan', codex: 'read-only', cursor: 'plan', gemini: 'default', pi: 'full' };
+    const r = await api(sj, '/api/spawn', { prompt: 'Read .scratch/gift-cards/spec.md, then ask me one question about it using the QUESTION/RECOMMENDED/OPTIONS format. Do not edit files.', agent, mode: READ_ONLY[agent], model: agent === 'claude' ? 'haiku' : null, name: 'driver probe' });
     let s, qq;
     for (let i = 0; i < 40 && !qq; i++) { await sleep(3000); const x = await api(sj, '/api/state'); s = x.sessions.find(y => y.id === r.id); qq = x.questions.find(y => y.from === r.id); if (s?.st === 'failed') break; }
-    ok('spawn: agent asks a parsed question', !!qq, qq ? qq.q : s?.log?.slice(-2).map(l => l.t).join(' | '));
+    ok(`spawn (${agent}): agent asks a parsed question`, !!qq, qq ? qq.q : s?.log?.slice(-2).map(l => l.t).join(' | '));
     if (qq) {
       await api(sj, '/api/answer', { qid: qq.id, answer: '__rec' });
       for (let i = 0; i < 40; i++) { await sleep(3000); s = (await api(sj, '/api/state')).sessions.find(y => y.id === r.id); if (s.st === 'waiting' && !s.doing.startsWith('Waiting')) break; }
-      ok('spawn: agent continues after the answer', s.log.filter(l => l.w === 'agent').length >= 2, `cost $${(s.cost || 0).toFixed(3)}, resume: claude --resume ${s.sessionId}`);
+      ok(`spawn (${agent}): agent continues after the answer`, s.log.filter(l => l.w === 'agent').length >= 2, `cost $${(s.cost || 0).toFixed(3)}, resume: ${s.resume}`);
     }
   }
   if (shots) for (const th of ['swiss', 'terminal', 'transit', 'toybox']) { const p = shot(sj.url, path.join(SHOTS, `board-${th}.png`), { theme: th }); if (p) console.log(`SHOT  ${p}`); }
