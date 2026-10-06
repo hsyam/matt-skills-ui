@@ -56,7 +56,14 @@ export async function readAdrs(repo) {
 
 export async function readSkills(repo) {
   const found = new Map();
-  const dirs = [path.join(repo, '.claude/skills'), path.join(repo, '.agents/skills'), path.join(os.homedir(), '.claude/skills'), path.join(os.homedir(), '.agents/skills')];
+  // Where skills.sh (`npx skills add`) and the agents themselves keep skills, per project and per user.
+  const home = os.homedir(), cfg = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+  const dirs = [
+    ...['.claude/skills', '.agents/skills', '.opencode/skills', '.pi/skills', '.cursor/skills'].map(d => path.join(repo, d)),
+    path.join(process.env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'), 'skills'), path.join(home, '.agents/skills'),
+    path.join(cfg, 'opencode/skills'), path.join(process.env.CODEX_HOME || path.join(home, '.codex'), 'skills'), path.join(home, '.cursor/skills'),
+    path.join(home, '.pi/agent/skills'), path.join(home, '.gemini/skills'), path.join(home, '.gemini/antigravity/skills'), path.join(cfg, 'agents/skills'),
+  ];
   for (const d of dirs) for (const e of await listDir(d)) if (!found.has(e.name) && await exists(path.join(d, e.name, 'SKILL.md'))) found.set(e.name, d);
   let source = null;
   const lock = await readJson(path.join(os.homedir(), '.agents/.skill-lock.json'));

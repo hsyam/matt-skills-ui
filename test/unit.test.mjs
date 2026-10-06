@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseTicketFile, parseMap, readLocal } from '../server/lib/local.mjs';
-import { classify, parentFromBody, blockedFromBody } from '../server/lib/github.mjs';
-import { parseQuestion } from '../server/lib/sessions.mjs';
-import { buildModel, oosMatch } from '../server/lib/model.mjs';
-import { field } from '../server/lib/util.mjs';
-import * as E from '../web/engine.mjs';
+import { parseTicketFile, parseMap, readLocal } from '../skills/matt-skills-ui/server/lib/local.mjs';
+import { classify, parentFromBody, blockedFromBody } from '../skills/matt-skills-ui/server/lib/github.mjs';
+import { parseQuestion } from '../skills/matt-skills-ui/server/lib/sessions.mjs';
+import { buildModel, oosMatch } from '../skills/matt-skills-ui/server/lib/model.mjs';
+import { field } from '../skills/matt-skills-ui/server/lib/util.mjs';
+import * as E from '../skills/matt-skills-ui/web/engine.mjs';
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'acme-local');
 

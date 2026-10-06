@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Matt Skills UI server. Usually started by `cli.mjs start`, not directly.
-//   node server.mjs --repo <dir> [--port 0] [--session <claude-session-id>]
+//   node server.mjs --repo <dir> [--port 0] [--session <claude-session-id>] [--host <agent>]
 // Binds 127.0.0.1 only. Every /api call needs the per-run token (header x-msu-token or ?token=),
 // and cross-origin requests are refused, so other local pages can't drive your sessions.
 import http from 'node:http';
@@ -9,7 +9,8 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildModel } from './lib/model.mjs';
-import { Sessions, PERMISSION_MODES } from './lib/sessions.mjs';
+import { Sessions } from './lib/sessions.mjs';
+import { agentList } from './lib/agents.mjs';
 import { repoDataDir, writeJson, readJson, dataDir, THEMES } from './lib/util.mjs';
 import { readTheme, writeThemeOverride } from './lib/config.mjs';
 
@@ -24,9 +25,10 @@ const pollMs = +arg('poll', 60000);
 let model = null, building = null, rebuildAgain = false;
 const remoteCache = { value: null, stale: true, at: 0 };
 const clients = new Set();
+let bt = null; // before Sessions: setMain() below already broadcasts
 const sessions = new Sessions({ repo, dataDir: DATA, cliPath: path.join(here, 'cli.mjs'), onChange: () => broadcast('sessions') });
 await sessions.load();
-sessions.setMain(arg('session', null));
+sessions.setMain(arg('session', null), arg('host', null));
 
 async function rebuild() {
   if (building) { rebuildAgain = true; return building; }
@@ -35,8 +37,7 @@ async function rebuild() {
   broadcast('state');
   if (rebuildAgain) { rebuildAgain = false; rebuild(); }
 }
-const statePayload = async () => ({ ...model, sessions: sessions.all(), questions: sessions.questions, theme: await readTheme(), themes: THEMES, permissionModes: PERMISSION_MODES, remoteAt: remoteCache.at });
-let bt = null;
+const statePayload = async () => ({ ...model, sessions: sessions.all(), questions: sessions.questions, theme: await readTheme(), themes: THEMES, agents: agentList(), remoteAt: remoteCache.at });
 function broadcast() { clearTimeout(bt); bt = setTimeout(async () => { const data = `event: state\ndata: ${JSON.stringify(await statePayload())}\n\n`; for (const c of clients) c.write(data); }, 120); }
 
 // Watch the files the skills write. Recursive fs.watch works on macOS, Windows and Linux (Node ≥ 20).
@@ -81,14 +82,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/send' && POST) { const b = await body(req); if (!b.text) return json(res, 400, { error: 'text required' }); return json(res, 200, { ok: sessions.send(b.to || 'main', String(b.text)) }); }
     if (p === '/api/spawn' && POST) {
       const b = await body(req); if (!b.prompt) return json(res, 400, { error: 'prompt required' });
-      const s = await sessions.spawn({ prompt: String(b.prompt), name: b.name, ticket: b.ticket || null, mode: b.mode, worktree: !!b.worktree, model: b.model || null });
+      const s = await sessions.spawn({ prompt: String(b.prompt), name: b.name, ticket: b.ticket || null, agent: b.agent, mode: b.mode, worktree: !!b.worktree, model: b.model || null });
       return json(res, 200, { ok: true, id: s.id });
     }
     if (p === '/api/answer' && POST) { const b = await body(req); return json(res, 200, { ok: sessions.answer(b.qid, String(b.answer || '')) }); }
     if (p === '/api/stop-session' && POST) { const b = await body(req); sessions.stop(b.id); return json(res, 200, { ok: true }); }
     if (p === '/api/questions' && POST) { const b = await body(req); if (!b.q) return json(res, 400, { error: 'q required' }); return json(res, 200, { ok: true, id: sessions.addQuestion({ from: 'main', q: String(b.q), rec: String(b.rec || ''), opts: [].concat(b.opts || []).map(String), ref: String(b.ref || '') }) }); }
     if (p === '/api/outbox') { const msgs = await sessions.waitOutbox(url.searchParams.get('wait') ? 25000 : 0); broadcast(); return json(res, 200, { messages: msgs }); }
-    if (p === '/api/main' && POST) { const b = await body(req); sessions.setMain(b.session); return json(res, 200, { ok: true }); }
+    if (p === '/api/main' && POST) { const b = await body(req); sessions.setMain(b.session, b.host); return json(res, 200, { ok: true }); }
     if (p === '/api/theme' && POST) { const b = await body(req); await writeThemeOverride(b.theme || null); broadcast(); return json(res, 200, { ok: true, theme: await readTheme() }); }
     if (p === '/api/shutdown' && POST) { json(res, 200, { ok: true }); setTimeout(shutdown, 50); return; }
     return json(res, 404, { error: 'unknown endpoint' });
