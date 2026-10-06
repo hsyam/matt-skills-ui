@@ -25,6 +25,7 @@ const pollMs = +arg('poll', 60000);
 let model = null, building = null, rebuildAgain = false;
 const remoteCache = { value: null, stale: true, at: 0 };
 const clients = new Set();
+let bt = null; // before Sessions: setMain() below already broadcasts
 const sessions = new Sessions({ repo, dataDir: DATA, cliPath: path.join(here, 'cli.mjs'), onChange: () => broadcast('sessions') });
 await sessions.load();
 sessions.setMain(arg('session', null));
@@ -37,7 +38,6 @@ async function rebuild() {
   if (rebuildAgain) { rebuildAgain = false; rebuild(); }
 }
 const statePayload = async () => ({ ...model, sessions: sessions.all(), questions: sessions.questions, theme: await readTheme(), themes: THEMES, agents: agentList(), remoteAt: remoteCache.at });
-let bt = null;
 function broadcast() { clearTimeout(bt); bt = setTimeout(async () => { const data = `event: state\ndata: ${JSON.stringify(await statePayload())}\n\n`; for (const c of clients) c.write(data); }, 120); }
 
 // Watch the files the skills write. Recursive fs.watch works on macOS, Windows and Linux (Node ≥ 20).
