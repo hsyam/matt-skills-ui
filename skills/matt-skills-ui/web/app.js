@@ -14,7 +14,9 @@ async function api(p, body) {
 /* ---------------- state ---------------- */
 let ST = null, P = {}, EFFORTS = [], ISSUES = [], SETUP = [], SESSIONS = [], QUESTIONS = [], ARTIFACTS = [], GLOSSARY = {};
 const VIEWS = ['chart', 'board', 'ledger', 'setup', 'triage', 'artifacts', 'glossary'];
-const S = { view: VIEWS.includes(qs.get('view')) ? qs.get('view') : 'chart', scope: qs.get('scope') === 'all' ? 'atlas' : 'effort', eff: null, t: null, sess: 'main', dtab: 'q', wide: false, pal: null, palI: 0, vb: null, boot: true, drawn: new Set(), themeOpen: false, spawn: null };
+const S = { view: VIEWS.includes(qs.get('view')) ? qs.get('view') : 'chart', scope: qs.get('scope') === 'all' ? 'atlas' : 'effort', eff: null, t: null, sess: 'main', dtab: 'q', wide: false, pal: null, palI: 0, vb: null, boot: true, drawn: new Set(), themeOpen: false, spawn: null,
+  // dock chat: per-session drafts, unread agent replies, log length last seen/drawn, new lines below the fold
+  drafts: {}, unread: {}, seen: {}, drawnLog: {}, below: 0, seenQ: null, focusMsg: false, chat: (() => { try { return localStorage.getItem('msu.chat') === '1'; } catch { return false; } })() };
 const THEMES = { A: ['Swiss', 'strict grid · one red · orthogonal graph'], B: ['Terminal', 'warm TUI panes · tmux status bar'], C: ['Transit', 'efforts as metro lines · tickets as stations'], D: ['Toybox', 'neo-brutalist · chunky · hard shadows'] };
 const TK = Object.keys(THEMES), SLUG = { A: 'swiss', B: 'terminal', C: 'transit', D: 'toybox' }, FROM_SLUG = { swiss: 'A', terminal: 'B', transit: 'C', toybox: 'D' };
 const urlTheme = FROM_SLUG[qs.get('theme')] || (THEMES[qs.get('variant')] ? qs.get('variant') : null);
@@ -30,10 +32,47 @@ function ingest(state) {
   if (!S.t && S.eff) { const e = effById(S.eff); S.t = e.tickets.find(t => ['ready', 'you', 'progress'].includes(stateOf(t, e)))?.id || e.tickets[0]?.id || null; }
   if (!SESSIONS.find(s => s.id === S.sess)) S.sess = 'main';
   if (first) S.boot = true;
-  if (!S.pal && !S.spawn && !document.activeElement?.closest?.('input,textarea,select')) render();
+  noticeIncoming(first);
+  // Typing in the chat box doesn't hold back live updates: render() keeps its draft, focus and caret.
+  const ae = document.activeElement;
+  if (!S.pal && !S.spawn && !S.composing && (ae?.id === 'msgIn' || !ae?.closest?.('input,textarea,select'))) render();
   else renderSoon = true;
 }
 let renderSoon = false;
+
+/* ---------------- dock chat: what sessions just said ---------------- */
+const logTotal = s => (s.cut || 0) + s.log.length;
+const dockTab = () => S.dtab === 'q' && QUESTIONS.length ? 'q' : 't';
+const viewing = id => S.sess === id && dockTab() === 't';
+const nearBottom = el => el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+function noticeIncoming(first) {
+  if (first || !S.seenQ) { SESSIONS.forEach(s => { S.seen[s.id] = logTotal(s); }); S.seenQ = new Set(QUESTIONS.map(q => q.id)); return; }
+  // A new question gets its own notification, so the reply that carried it doesn't get a second one.
+  const asked = new Set();
+  for (const q of QUESTIONS) if (!S.seenQ.has(q.id)) { S.seenQ.add(q.id); asked.add(q.from); notify(q.from, q.q, true); }
+  for (const s of SESSIONS) {
+    const was = S.seen[s.id] ?? 0, now = logTotal(s); S.seen[s.id] = now;
+    if (now <= was) continue;
+    const fresh = s.log.slice(-(now - was)), said = fresh.filter(m => m.w === 'agent');
+    if (viewing(s.id)) { const db = document.getElementById('dispbody'); if (db && !nearBottom(db)) S.below += fresh.filter(m => m.w !== 'me').length; continue; }
+    if (!said.length) continue;
+    S.unread[s.id] = (S.unread[s.id] || 0) + said.length;
+    if (!asked.has(s.id)) notify(s.id, said.at(-1).t);
+  }
+}
+function notify(id, text, isQ) {
+  const host = document.getElementById('toast'); if (!host) return;
+  const d = document.createElement('div'); d.className = 'note'; d.dataset.act = 'openchat'; d.dataset.s = id; if (isQ) d.dataset.tab = 'q';
+  d.innerHTML = `<b>${esc(id)}</b>${isQ ? ' is asking' : ''}<span>${esc(trunc(String(text).replace(/\s+/g, ' ').trim(), 110))}</span>`;
+  host.appendChild(d); setTimeout(() => d.remove(), 6500);
+}
+function growMsg(el) { el.style.height = 'auto'; if (el.value) el.style.height = el.scrollHeight + 2 + 'px'; }
+function focusMsg(seed) {
+  const i = document.getElementById('msgIn'); if (!i) return;
+  if (seed && !i.value) { i.value = seed; S.drafts[S.sess] = seed; growMsg(i); }
+  i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+}
+function openChat(id, tab) { S.sess = id; S.dtab = tab || 't'; S.unread[id] = 0; S.below = 0; S.focusMsg = true; render(); }
 
 /* ---------------- helpers ---------------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -329,21 +368,31 @@ function mainHTML() {
 const stLabel = s => ({ running: 'running', waiting: 'waiting on you', starting: 'starting', ended: 'ended', failed: 'failed', listening: 'listening', offline: 'not listening', unknown: '' }[s] ?? s);
 function dockHTML() {
   const s = SESSIONS.find(x => x.id === S.sess) || SESSIONS[0];
-  const tab = S.dtab === 'q' && QUESTIONS.length ? 'q' : 't';
+  const tab = dockTab();
   const live = SESSIONS.filter(x => x.kind !== 'main' && ['running', 'starting'].includes(x.st)).length;
+  const asks = QUESTIONS.some(q => q.from === s.id), copies = s.kind === 'main' && !canSend();
+  const ph = S.replyTo ? 'Your answer…' : asks ? `Answer ${s.id}’s question, or steer it…` : s.kind === 'main' ? (canSend() ? 'Message the main session (arrives via its board listener)' : 'Type a command to copy for your main session') : 'Reply, steer, or type a /command';
   return `<div class="exp"><div class="hd"><b>Sessions</b><span class="faint" style="font-size:12px">${live} running · ${QUESTIONS.length} question${QUESTIONS.length === 1 ? '' : 's'} for you · tick = ~150k smart zone</span></div>
-    <div class="row">${SESSIONS.map(x => `<div class="ship ${x.id === s.id ? 'on' : ''}" data-sess="${esc(x.id)}"><div class="t"><span class="sd ${x.st}"></span>${esc(x.name)}</div><div class="d" title="${esc(x.doing || '')}">${esc(x.doing || stLabel(x.st))}</div>
+    <div class="row">${SESSIONS.map(x => `<div class="ship ${x.id === s.id ? 'on' : ''} ${S.unread[x.id] ? 'fresh' : ''}" data-sess="${esc(x.id)}"><div class="t"><span class="sd ${x.st}"></span><span class="nm">${esc(x.name)}</span>${S.unread[x.id] ? `<span class="unread" title="${S.unread[x.id]} new repl${S.unread[x.id] > 1 ? 'ies' : 'y'}">${S.unread[x.id]}</span>` : ''}</div><div class="d" title="${esc(x.doing || '')}">${esc(x.doing || stLabel(x.st))}</div>
       <div class="fuel"><i style="width:${x.ctx == null ? 0 : Math.min(100, x.ctx / 2)}%;background:${fuelColor(x.ctx || 0)}"></i><b></b></div>
       <div class="k"><span>${x.ctx == null ? '—' : x.ctx + 'k'} context</span><span>${x.kind === 'main' ? advise(x) : stLabel(x.st)}</span></div></div>`).join('')}
       <button class="ship add" data-act="spawn" data-cmd="">＋ New session</button></div></div>
-    <div class="disp"><div class="tabs"><button class="${tab === 'q' ? 'on' : ''}" data-dtab="q">Questions for you <span class="mono" style="color:var(--s-you)">${QUESTIONS.length}</span></button><button class="${tab === 't' ? 'on' : ''}" data-dtab="t">Log · ${esc(s.id)}</button>${s.kind !== 'main' && ['running', 'waiting', 'starting'].includes(s.st) ? `<button data-act="stopsess" data-s="${esc(s.id)}" style="margin-left:auto" title="Stop this session">■ stop</button>` : ''}</div>
-      <div class="body" id="dispbody">${tab === 'q' ? QUESTIONS.map(qHTML).join('') || '<p class="empty">No one is waiting on you.</p>' : logHTML(s)}</div>
-      <div class="compose"><select id="tgt">${SESSIONS.map(x => `<option value="${esc(x.id)}" ${x.id === s.id ? 'selected' : ''}>to ${esc(x.id)}</option>`).join('')}</select><input id="msgIn" placeholder="${s.kind === 'main' ? (canSend() ? 'Message the main session (arrives via its board listener)' : 'The main session can’t receive messages: Send copies your text') : 'Reply, steer, or type a /command'}"><button class="btn go" data-act="msg">Send</button></div></div>`;
+    <div class="disp"><div class="tabs"><button class="${tab === 'q' ? 'on' : ''}" data-dtab="q">Questions for you <span class="mono" style="color:var(--s-you)">${QUESTIONS.length}</span></button><button class="${tab === 't' ? 'on' : ''}" data-dtab="t">Log · ${esc(s.id)}</button>
+      <span class="tr">${s.kind !== 'main' && ['running', 'waiting', 'starting'].includes(s.st) ? `<button data-act="stopsess" data-s="${esc(s.id)}" title="Stop this session">■ stop</button>` : ''}<button data-act="chatsize" title="${S.chat ? 'Smaller chat' : 'Bigger chat'} (\\)">${S.chat ? '⤡' : '⤢'}</button></span></div>
+      <div class="bodyw"><div class="body" id="dispbody" data-s="${tab === 't' ? esc(s.id) : ''}">${tab === 'q' ? QUESTIONS.map(qHTML).join('') || '<p class="empty">No one is waiting on you.</p>' : logHTML(s)}</div>
+      ${tab === 't' && S.below ? `<button class="jump" data-act="jump">↓ ${S.below} new</button>` : ''}</div>
+      <div class="compose"><div class="cbox ${asks || S.replyTo ? 'ask' : ''}"><textarea id="msgIn" rows="1" placeholder="${esc(ph)}" aria-label="Message ${esc(s.id)}"></textarea>
+        <div class="cbar"><select id="tgt" title="Who gets this message">${SESSIONS.map(x => `<option value="${esc(x.id)}" ${x.id === s.id ? 'selected' : ''}>to ${esc(x.id)}</option>`).join('')}</select><span class="hint"><span class="kbd">↵</span> ${copies ? 'copy' : 'send'} <span class="kbd">⇧↵</span> new line</span><button class="btn go" data-act="msg">${copies ? 'Copy' : 'Send'}</button></div></div></div></div>`;
 }
 function logHTML(s) {
   if (s.kind === 'main' && !s.canReceive && s.canReceive != null) return `<p class="empty">${esc(s.hostLabel || 'This session')} can’t receive board messages, so the board copies commands for you to paste there. Background agents still take replies here.</p>`;
   if (s.kind === 'main' && !s.log.length) return `<p class="empty">${s.st === 'offline' ? 'The main session isn’t listening. Run /matt-skills-ui in it to reconnect.' : 'Messages you send to the main session appear here.'}</p>`;
-  return s.log.slice(-120).map(m => `<div class="msg ${m.w === 'me' ? 'me' : m.w === 'tool' ? 'tool' : m.w === 'sys' ? 'sys' : ''}">${m.w === 'agent' || m.w === 'me' ? `<div class="w">${m.w === 'me' ? 'you' : esc(s.id)}</div>` : ''}${esc(m.t)}</div>`).join('') + (s.kind !== 'main' && (s.resume || s.sessionId) ? `<div class="msg sys">Resume in a terminal: ${esc(s.resume || 'claude --resume ' + s.sessionId)}</div>` : '');
+  // Lines the board hasn't drawn for this session yet slide in; the first draw of a session doesn't animate.
+  const shown = s.log.slice(-120), base = logTotal(s) - shown.length, drawn = S.drawnLog[s.id] ?? Infinity; let k = 0;
+  const working = s.kind !== 'main' && ['running', 'starting'].includes(s.st);
+  return shown.map((m, j) => { const nw = base + j >= drawn; return `<div class="msg ${m.w === 'me' ? 'me' : m.w === 'tool' ? 'tool' : m.w === 'sys' ? 'sys' : 'agent'}${nw ? ' new' : ''}"${nw ? ` style="--i:${Math.min(k++, 6)}"` : ''}>${m.w === 'agent' || m.w === 'me' ? `<div class="w">${m.w === 'me' ? 'you' : esc(s.id)}</div>` : ''}${esc(m.t)}</div>`; }).join('')
+    + (s.kind !== 'main' && (s.resume || s.sessionId) ? `<div class="msg sys">Resume in a terminal: ${esc(s.resume || 'claude --resume ' + s.sessionId)}</div>` : '')
+    + (working ? `<div class="typing" title="${esc(s.doing || '')}"><span class="dots"><i></i><i></i><i></i></span><span>${esc(s.st === 'starting' ? 'starting…' : s.doing ? trunc(s.doing, 80) : 'working…')}</span></div>` : '');
 }
 function qHTML(q) {
   return `<div class="q"><div class="from"><span class="who" style="--c:var(--s-you)">${esc(q.skill || 'question')}</span>${esc(q.from)} is waiting${q.ref ? ` · <span class="chip" data-t="${esc(q.ref)}">${esc(findT(q.ref)[0]?.label || q.ref)}</span>` : ''}</div>
@@ -394,9 +443,14 @@ function render() {
   if (!ST) return;
   renderSoon = false;
   document.documentElement.dataset.theme = V;
-  document.title = `${P.name} · Matt Skills UI`;
-  const keepScroll = document.getElementById('dispbody')?.scrollTop, boardScroll = [document.querySelector('.board')?.scrollLeft, document.querySelector('.board')?.scrollTop];
-  document.getElementById('root').innerHTML = `<div class="app ${S.wide ? 'wide' : ''} ${S.boot ? 'boot' : ''}">
+  if (dockTab() === 't') S.unread[S.sess] = 0;
+  const unread = Object.values(S.unread).reduce((a, b) => a + b, 0);
+  document.title = `${unread ? `(${unread}) ` : ''}${P.name} · Matt Skills UI`;
+  // Keep the chat where the reader left it: same session and scrolled up stays put; otherwise follow the newest line.
+  const odb = document.getElementById('dispbody'), prevLog = odb && { s: odb.dataset.s, top: odb.scrollTop, bottom: nearBottom(odb) };
+  const ae = document.activeElement, keepMsg = ae?.id === 'msgIn' ? [ae.selectionStart, ae.selectionEnd, ae.scrollTop] : null;
+  const keepScroll = odb?.scrollTop, boardScroll = [document.querySelector('.board')?.scrollLeft, document.querySelector('.board')?.scrollTop];
+  document.getElementById('root').innerHTML = `<div class="app ${S.wide ? 'wide' : ''} ${S.chat ? 'chat' : ''} ${S.boot ? 'boot' : ''}">
     <header class="mast"><div class="brand"><b>Matt Skills UI</b><i>${esc(P.name)}</i></div>
       <div class="meta"><span class="mono">⎇ ${esc(P.branch)}</span><span>${esc(P.tracker)}${P.repo ? ` · <span class="mono">${esc(P.repo)}</span>` : ''}</span></div><span class="sp"></span>
       ${QUESTIONS.length ? `<button class="await" data-act="awaits">${QUESTIONS.length} question${QUESTIONS.length > 1 ? 's' : ''} waiting on you</button>` : ''}
@@ -409,7 +463,19 @@ function render() {
     <aside class="notes">${notesHTML()}</aside>
     <footer class="dock">${dockHTML()}</footer></div>${S.pal != null ? paletteHTML() : ''}${S.themeOpen ? pickerHTML() : ''}${S.spawn ? spawnHTML() : ''}`;
   S.boot = false;
-  const db = document.getElementById('dispbody'); if (db) db.scrollTop = S.dtab === 't' ? db.scrollHeight : (keepScroll || 0);
+  const db = document.getElementById('dispbody');
+  if (db && dockTab() === 't') {
+    if (!prevLog || prevLog.s !== S.sess || prevLog.bottom) { db.scrollTop = db.scrollHeight; S.below = 0; document.querySelector('.jump')?.remove(); } else db.scrollTop = prevLog.top;
+    db.onscroll = () => { if (S.below && nearBottom(db)) { S.below = 0; document.querySelector('.jump')?.remove(); } };
+    const cs = SESSIONS.find(x => x.id === S.sess); if (cs) S.drawnLog[cs.id] = logTotal(cs);
+  } else if (db) db.scrollTop = keepScroll || 0;
+  const mi = document.getElementById('msgIn');
+  if (mi) {
+    mi.value = S.drafts[S.sess] || ''; growMsg(mi);
+    if (keepMsg) { mi.focus({ preventScroll: true }); mi.setSelectionRange(keepMsg[0], keepMsg[1]); mi.scrollTop = keepMsg[2]; }
+    else if (S.focusMsg && S.pal == null && !S.spawn) focusMsg();
+    S.focusMsg = false;
+  }
   const bd = document.querySelector('.board'); if (bd && boardScroll[0] != null) { bd.scrollLeft = boardScroll[0]; bd.scrollTop = boardScroll[1]; }
   if (document.getElementById('chartsvg')) wireChart();
   if (S.pal != null) { const i = document.getElementById('palIn'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
@@ -456,27 +522,38 @@ document.addEventListener('click', ev => {
     const ref = S.spawn.ref, t = ref ? findT(ref)[0] : null; S.spawn = null; render();
     api('/api/spawn', { prompt, ticket: ref, agent, mode, worktree, name: t ? t.title : prompt.slice(0, 50) }).then(r => { S.sess = r.id; S.dtab = 't'; toast(`Spawned <b>${esc(r.id)}</b>`); }, fail); return; }
   if (a === 'answer') { api('/api/answer', { qid: d.q, answer: d.a }).then(() => toast('Answer sent'), fail); return; }
-  if (a === 'reply') { S.sess = d.s; S.dtab = 't'; S.replyTo = d.q; render(); const i = document.getElementById('msgIn'); if (i) { i.placeholder = 'Your answer…'; i.focus(); } return; }
+  if (a === 'reply') { S.replyTo = d.q; return openChat(d.s); }
+  if (a === 'openchat') { if (el.closest('#toast')) el.remove(); return openChat(d.s, d.tab); }
+  if (a === 'chatsize') { S.chat = !S.chat; try { localStorage.setItem('msu.chat', S.chat ? '1' : '0'); } catch {} S.focusMsg = true; return render(); }
+  if (a === 'jump') { const db = document.getElementById('dispbody'); db?.scrollTo({ top: db.scrollHeight, behavior: 'smooth' }); S.below = 0; el.remove(); return; }
   if (a === 'stopsess') { api('/api/stop-session', { id: d.s }).then(() => toast(`Stopping <b>${esc(d.s)}</b>`), fail); return; }
   if (a === 'msg') {
-    const inp = document.getElementById('msgIn'), txt = inp?.value.trim(); if (!txt) return; const to = document.getElementById('tgt').value;
-    if (to === 'main' && !canSend()) { inp.value = ''; return copyForMain(txt); }
-    const q = S.replyTo && QUESTIONS.find(x => x.id === S.replyTo && x.from === to); S.replyTo = null; inp.value = '';
+    const inp = document.getElementById('msgIn'), txt = inp?.value.trim(); if (!txt) return inp?.focus(); const to = document.getElementById('tgt').value;
+    S.drafts[to] = ''; inp.value = ''; growMsg(inp); inp.focus();
+    if (to === 'main' && !canSend()) return copyForMain(txt);
+    const q = S.replyTo && QUESTIONS.find(x => x.id === S.replyTo && x.from === to); S.replyTo = null;
     (q ? api('/api/answer', { qid: q.id, answer: txt }) : api('/api/send', { to, text: txt })).then(() => toast(`Sent to <b>${esc(to)}</b>`), fail); return; }
-  if (a === 'watch') { S.sess = d.s; S.dtab = 't'; return render(); }
+  if (a === 'watch') return openChat(d.s);
   if (d.v) { S.view = d.v; return render(); }
   if (d.scope) { S.scope = d.scope; if (S.scope === 'atlas' && S.view === 'ledger') S.view = 'chart'; return render(); }
-  if (d.dtab) { S.dtab = d.dtab; return render(); }
-  if (d.sess) { S.sess = d.sess; S.dtab = 't'; return render(); }
+  if (d.dtab) { S.dtab = d.dtab; S.focusMsg = d.dtab === 't'; return render(); }
+  if (d.sess) return openChat(d.sess);
   if (d.view) { S.view = d.view; return render(); }
   if (d.iss) { S.view = 'triage'; return render(); }
   if (d.eff) { selectEff(d.eff); return render(); }
   if (d.t) { const [t, e] = findT(d.t); if (!t) return; S.t = d.t; if (S.scope === 'effort') S.eff = e.id; if (!['chart', 'board', 'ledger'].includes(S.view)) { S.view = 'chart'; S.eff = e.id; S.scope = 'effort'; } S.wide = false; return render(); }
 });
 document.addEventListener('change', ev => {
+  if (ev.target.id === 'tgt') return openChat(ev.target.value);
   if (ev.target.id === 'spAgent' && S.spawn) { S.spawn.cmd = document.getElementById('spPrompt').value; S.spawn.worktree = document.getElementById('spWt').checked; S.spawn.agent = ev.target.value; render(); }
 });
-document.addEventListener('input', ev => { if (ev.target.id === 'palIn') { S.pal = ev.target.value; S.palI = 0; render(); } });
+document.addEventListener('input', ev => {
+  if (ev.target.id === 'palIn') { S.pal = ev.target.value; S.palI = 0; render(); }
+  if (ev.target.id === 'msgIn') { S.drafts[S.sess] = ev.target.value; growMsg(ev.target); }
+});
+// Don't re-render under an IME composition: it would drop the half-typed characters.
+document.addEventListener('compositionstart', () => { S.composing = true; });
+document.addEventListener('compositionend', () => { S.composing = false; if (renderSoon) render(); });
 document.addEventListener('focusout', () => { if (renderSoon) setTimeout(() => { if (!document.activeElement?.closest?.('input,textarea,select') && !S.pal && !S.spawn) render(); }, 200); });
 document.addEventListener('keydown', ev => {
   if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); S.pal = S.pal == null ? '' : null; S.palI = 0; return render(); }
@@ -487,7 +564,14 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (S.spawn && ev.key === 'Escape') { S.spawn = null; return render(); }
-  if (ev.target.closest('input,textarea,select')) { if (ev.key === 'Enter' && ev.target.id === 'msgIn') { ev.preventDefault(); document.querySelector('[data-act="msg"]').click(); } return; }
+  if (ev.target.id === 'msgIn') {
+    if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); document.querySelector('[data-act="msg"]').click(); }
+    else if (ev.key === 'Escape') ev.target.blur();
+    return;
+  }
+  if (ev.target.closest('input,textarea,select')) return;
+  if (ev.key === '/' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return focusMsg('/'); }
+  if (ev.key === '\\') { S.chat = !S.chat; try { localStorage.setItem('msu.chat', S.chat ? '1' : '0'); } catch {} return render(); }
   if (ev.altKey && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) return goTheme(TK[(TK.indexOf(V) + (ev.key === 'ArrowRight' ? 1 : TK.length - 1)) % TK.length], true);
   if (ev.key === 'Escape' && S.themeOpen) { S.themeOpen = false; return render(); }
   if (ev.key === '1') { S.view = 'chart'; render(); } if (ev.key === '2') { S.view = 'board'; render(); } if (ev.key === '3' && S.scope === 'effort') { S.view = 'ledger'; render(); }
