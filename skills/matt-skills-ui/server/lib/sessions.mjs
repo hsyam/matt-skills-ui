@@ -1,6 +1,7 @@
 // Sessions the board knows about:
-//  - "main": the interactive Claude session that ran /matt-skills-ui. We can't type into it;
-//    messages go to an outbox that its Monitor (cli.mjs listen) streams in. Context is read
+//  - "main": the agent session that ran /matt-skills-ui. We can't type into it; messages go to an
+//    outbox that a Claude Code Monitor (cli.mjs listen) streams in. Other hosts have no such tool,
+//    so for them the board copies commands instead of sending. Claude's context is read
 //    best-effort from its transcript (~/.claude/projects/<slug>/<id>.jsonl, an internal format).
 //  - spawned: headless agent CLIs (Claude Code, OpenCode, Codex, Cursor, Gemini, Pi; see agents.mjs).
 //    Claude stays alive and takes replies on stdin; the others run one process per turn and the
@@ -12,6 +13,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { run, readJson, writeJson, exists } from './util.mjs';
 import { AGENTS, agentBin } from './agents.mjs';
+
+const HOSTS = { claude: 'Claude Code', opencode: 'OpenCode', codex: 'Codex', cursor: 'Cursor', pi: 'Pi', gemini: 'Gemini CLI', antigravity: 'Antigravity', amp: 'Amp', copilot: 'GitHub Copilot' };
 
 export function preamble(repo, cliPath, { skills = false } = {}) {
   return [
@@ -68,13 +71,19 @@ export class Sessions {
     this.questions = (saved.questions || []).filter(q => q.from === 'main' || this.list.some(s => s.id === q.from && s.st === 'waiting'));
     this.outbox = saved.outbox || []; this.seq = saved.seq || 0; this.delivered = saved.delivered ?? this.seq;
     if (saved.mainSessionId) this.main.sessionId = saved.mainSessionId;
+    if (saved.mainHost) this.main.host = saved.mainHost;
   }
   save() {
     clearTimeout(this._t);
-    this._t = setTimeout(() => writeJson(this.file, { sessions: this.list.map(s => ({ ...s, log: s.log.slice(-200) })), questions: this.questions, outbox: this.outbox.slice(-100), seq: this.seq, delivered: this.delivered, mainSessionId: this.main.sessionId }).catch(() => {}), 300);
+    this._t = setTimeout(() => writeJson(this.file, { sessions: this.list.map(s => ({ ...s, log: s.log.slice(-200) })), questions: this.questions, outbox: this.outbox.slice(-100), seq: this.seq, delivered: this.delivered, mainSessionId: this.main.sessionId, mainHost: this.main.host }).catch(() => {}), 300);
   }
   changed() { this.save(); this.onChange?.(); }
-  setMain(sessionId) { if (sessionId && !sessionId.includes('$')) { this.main.sessionId = sessionId; this.changed(); } }
+  setMain(sessionId, host) {
+    const real = v => v && typeof v === 'string' && !v.includes('$') && !v.includes('<');
+    if (real(host)) this.main.host = host.toLowerCase();
+    if (real(sessionId)) { this.main.sessionId = sessionId; if (!real(host)) this.main.host = 'claude'; }
+    if (real(host) || real(sessionId)) this.changed();
+  }
   refreshMain() {
     const dir = path.join(os.homedir(), '.claude/projects', projectSlug(this.repo));
     const f = this.main.sessionId ? path.join(dir, this.main.sessionId + '.jsonl') : null;
@@ -82,8 +91,17 @@ export class Sessions {
     if (r) this.main.ctx = r.ctx;
     const listening = Date.now() - this.main.lastListen < 90_000;
     const waitingQ = this.questions.some(q => q.from === 'main');
-    this.main.st = waitingQ ? 'waiting' : listening ? 'listening' : 'offline';
-    this.main.doing = listening ? 'Receiving board messages via Monitor' : 'Not listening: run /matt-skills-ui again to reconnect';
+    // A Claude session can always be sent to: the outbox waits for its listener to reconnect.
+    const host = this.main.host || (this.main.sessionId ? 'claude' : null);
+    this.main.hostLabel = HOSTS[host] || host;
+    this.main.canReceive = host === 'claude' || listening;
+    if (this.main.canReceive) {
+      this.main.st = waitingQ ? 'waiting' : listening ? 'listening' : 'offline';
+      this.main.doing = listening ? 'Receiving board messages via Monitor' : 'Not listening: run /matt-skills-ui again to reconnect';
+    } else {
+      this.main.st = waitingQ ? 'waiting' : 'unknown';
+      this.main.doing = `${host ? this.main.hostLabel : 'Opened from a terminal'}: can't receive board messages, so Send copies instead`;
+    }
   }
   all() { this.refreshMain(); return [this.main, ...this.list]; }
 
