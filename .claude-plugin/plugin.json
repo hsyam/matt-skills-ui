@@ -1,0 +1,35 @@
+{
+  "name": "matt-skills-ui",
+  "version": "0.1.0",
+  "description": "Unofficial web UI for mattpocock/skills: see your specs, tickets and wayfinder maps as a graph, with the next command for each. Spawn agents and answer their questions from the board.",
+  "author": {
+    "name": "Hassan Syam",
+    "url": "https://github.com/hsyam"
+  },
+  "homepage": "https://github.com/hsyam/matt-skills-ui",
+  "repository": "https://github.com/hsyam/matt-skills-ui",
+  "license": "MIT",
+  "keywords": [
+    "mattpocock-skills",
+    "claude-code-plugin",
+    "claude-code",
+    "skills",
+    "wayfinder",
+    "tickets",
+    "kanban"
+  ],
+  "userConfig": {
+    "theme": {
+      "type": "string",
+      "title": "Board theme",
+      "description": "How the board looks. Every theme has the same features; you can switch any time on the board or with /matt-skills-ui theme <name>.",
+      "options": [
+        "swiss",
+        "terminal",
+        "transit",
+        "toybox"
+      ],
+      "default": "swiss"
+    }
+  }
+}

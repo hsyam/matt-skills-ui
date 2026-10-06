@@ -1,0 +1,17 @@
+{
+  "name": "matt-skills-ui",
+  "owner": {
+    "name": "Hassan Syam",
+    "url": "https://github.com/hsyam"
+  },
+  "metadata": {
+    "description": "Unofficial web UI for mattpocock/skills."
+  },
+  "plugins": [
+    {
+      "name": "matt-skills-ui",
+      "source": "./",
+      "description": "Unofficial web UI for mattpocock/skills."
+    }
+  ]
+}
