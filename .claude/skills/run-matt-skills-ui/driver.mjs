@@ -64,7 +64,7 @@ async function smoke({ keep, shots, withSpawn } = {}) {
   console.log(`repo ${repo}\nhome ${HOME}`);
   const startOut = cli('start', '--repo', repo, '--no-open');
   ok('cli start prints a URL', /URL: http:\/\/127\.0\.0\.1:\d+\/\?token=/.test(startOut));
-  const sj = serverJson(repo);
+  let sj = serverJson(repo);
   const st = await api(sj, '/api/state');
   ok('state: 3 efforts (spec, map, empty spec)', st.efforts?.length === 3, st.efforts?.map(e => e.id).join(','));
   ok('state: 3 inbox issues, dark-mode matched to .out-of-scope', st.issues?.length === 3 && st.issues.some(i => i.oos === 'dark-mode'));
@@ -73,6 +73,15 @@ async function smoke({ keep, shots, withSpawn } = {}) {
   ok('security: missing token refused', (await (await fetch(sj.base + '/api/state')).json()).error === 'bad token');
   ok('security: cross-origin refused', (await (await fetch(sj.base + '/api/state', { headers: { 'x-msu-token': sj.token, origin: 'https://evil.example' } })).json()).error === 'cross-origin request refused');
   ok('static: index.html served', (await (await fetch(sj.base + '/')).text()).includes('/app.js'));
+  const mainOf = async () => (await api(sj, '/api/state')).sessions.find(x => x.kind === 'main');
+  ok('host: opened by hand, the main session can\'t receive', (await mainOf()).canReceive === false);
+  cli('stop', '--repo', repo);
+  // A fresh start that names its host or session must not crash (setMain broadcasts during startup).
+  cli('start', '--repo', repo, '--no-open', '--host', 'opencode'); sj = serverJson(repo);
+  const m1 = await mainOf();
+  ok('host: --host opencode is named and copies instead of sending', m1.canReceive === false && m1.hostLabel === 'OpenCode', m1.doing);
+  cli('start', '--repo', repo, '--no-open', '--session', 'driver-session', '--host', 'claude');
+  ok('host: a Claude session can receive', (await mainOf()).canReceive === true);
 
   const listener = spawn(process.execPath, [CLI, 'listen', '--repo', repo], { env });
   let heard = ''; listener.stdout.on('data', d => heard += d);

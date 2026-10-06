@@ -219,7 +219,7 @@ function setupView() {
   const sk = ST.skills || { user: [], model: [] };
   return `<div class="pane"><h2>Skills setup</h2><p class="lede">What <span class="cmd">/setup-matt-pocock-skills</span> wrote in ${esc(P.name)}, and what the other skills will find when they look.</p>
     <div class="manifest">${SETUP.map(s => `<div style="color:${s.st === 'ok' ? 'var(--s-done)' : s.st === 'warn' ? 'var(--s-progress)' : s.st === 'missing' ? 'var(--s-blocked)' : 'var(--fg3)'}">${s.st === 'ok' ? '●' : s.st === 'warn' ? '▲' : s.st === 'missing' ? '○' : '·'}</div>
-      <div><b>${esc(s.label)}</b><div class="mono faint" style="font-size:11px">${esc(s.file)}</div></div><div class="muted">${esc(s.detail)}</div><div>${s.fix ? `<button class="btn" data-act="send" data-cmd="${esc(s.fix)}">Send ${esc(s.fix)}</button>` : ''}</div>`).join('')}</div>
+      <div><b>${esc(s.label)}</b><div class="mono faint" style="font-size:11px">${esc(s.file)}</div></div><div class="muted">${esc(s.detail)}</div><div>${s.fix ? `<button class="btn" data-act="send" data-cmd="${esc(s.fix)}">${SEND()} ${esc(s.fix)}</button>` : ''}</div>`).join('')}</div>
     <h3 class="lbl">mattpocock/skills ${sk.source ? '· ' + esc(sk.source) : '· not detected'}</h3>
     <p class="faint" style="margin:0 0 6px;font-size:12px">You type these ${sk.user.some(s => !s.installed) ? '(struck through = not installed)' : ''}</p><div class="skills">${sk.user.map(s => `<span class="u" style="${s.installed ? '' : 'text-decoration:line-through;opacity:.5'}">/${s.name}</span>`).join('')}</div>
     <p class="faint" style="margin:12px 0 6px;font-size:12px">Agents use these on their own</p><div class="skills">${sk.model.map(s => `<span style="${s.installed ? '' : 'text-decoration:line-through;opacity:.5'}">${s.name}</span>`).join('')}</div></div>`;
@@ -228,7 +228,7 @@ function triageView() {
   const b = [['Never triaged', ISSUES.filter(i => !i.state)], ['needs-triage', ISSUES.filter(i => i.state === 'needs-triage')], ['needs-info', ISSUES.filter(i => i.state === 'needs-info')], ['Triaged', ISSUES.filter(i => ['ready-for-agent', 'ready-for-human'].includes(i.state))]];
   return `<div class="pane"><h2>Triage</h2><p class="lede">Issues you didn’t write. Tickets from /to-tickets are already agent-ready and never land here.</p>
     ${ISSUES.length ? '' : '<p class="empty">No incoming issues.</p>'}
-    ${b.map(([h, l]) => l.length ? `<h3 class="lbl">${h} · ${l.length}</h3><table class="ledger"><tbody>${l.map(i => { const n = issueNext(i); return `<tr><td style="width:64px" class="id">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener" class="extlink">${esc(i.label)}</a>` : esc(i.label)}</td><td>${gl(i.title)}<div class="faint" style="font-size:11.5px">${i.author ? '@' + esc(i.author) + ' · ' : ''}${esc(i.age || '')}${i.cat ? ' · ' + i.cat : ''} · ${esc(n.text)}</div></td><td style="width:220px;text-align:right">${n.cmd ? `<button class="btn ${n.spawn ? 'go' : ''}" data-act="${n.spawn ? 'spawn' : 'send'}" data-cmd="${esc(n.cmd)}" data-ref="${esc(i.id)}">${n.spawn ? 'Spawn ' : 'Send '}${esc(trunc(n.cmd, 26))}</button>` : who(n.who)}</td></tr>`; }).join('')}</tbody></table>` : '').join('')}</div>`;
+    ${b.map(([h, l]) => l.length ? `<h3 class="lbl">${h} · ${l.length}</h3><table class="ledger"><tbody>${l.map(i => { const n = issueNext(i); return `<tr><td style="width:64px" class="id">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener" class="extlink">${esc(i.label)}</a>` : esc(i.label)}</td><td>${gl(i.title)}<div class="faint" style="font-size:11.5px">${i.author ? '@' + esc(i.author) + ' · ' : ''}${esc(i.age || '')}${i.cat ? ' · ' + i.cat : ''} · ${esc(n.text)}</div></td><td style="width:220px;text-align:right">${n.cmd ? `<button class="btn ${n.spawn ? 'go' : ''}" data-act="${n.spawn ? 'spawn' : 'send'}" data-cmd="${esc(n.cmd)}" data-ref="${esc(i.id)}">${n.spawn ? 'Spawn ' : SEND() + ' '}${esc(trunc(n.cmd, 26))}</button>` : who(n.who)}</td></tr>`; }).join('')}</tbody></table>` : '').join('')}</div>`;
 }
 function artifactsView() {
   return `<div class="pane"><h2>Artifacts</h2><p class="lede">What the skills left behind: prototype and research branches, reports and handoffs in the temp folder, decisions in ADRs.</p>
@@ -251,7 +251,7 @@ function routeLine(e) {
 function nextBlock(n, t) {
   return `<div class="next"><div class="t"><span class="lbl" style="color:var(--accent)">Next</span>${who(n.who)}</div><p>${esc(n.text)}</p>
     ${n.cmd ? `<span class="cmd" title="${esc(n.cmd)}">${esc(trunc(n.cmd, 44))}</span>` : ''}
-    ${(n.cmd || n.watch) ? `<div class="acts">${n.spawn ? `<button class="btn go" data-act="spawn" data-cmd="${esc(n.cmd)}" data-ref="${esc(t ? t.id : n.t || '')}">Spawn agent</button>` : ''}${n.cmd ? `<button class="btn" data-act="send" data-cmd="${esc(n.cmd)}">Send to main</button><button class="btn quiet" data-act="copy" data-cmd="${esc(n.cmd)}">Copy</button>` : ''}${n.watch ? `<button class="btn" data-act="watch" data-s="${esc(n.watch)}">Follow ${esc(n.watch)}</button>` : ''}</div>` : ''}</div>`;
+    ${(n.cmd || n.watch) ? `<div class="acts">${n.spawn ? `<button class="btn go" data-act="spawn" data-cmd="${esc(n.cmd)}" data-ref="${esc(t ? t.id : n.t || '')}">Spawn agent</button>` : ''}${n.cmd ? `${canSend() ? `<button class="btn" data-act="send" data-cmd="${esc(n.cmd)}">Send to main</button>` : ''}<button class="btn quiet" data-act="copy" data-cmd="${esc(n.cmd)}">Copy</button>` : ''}${n.watch ? `<button class="btn" data-act="watch" data-s="${esc(n.watch)}">Follow ${esc(n.watch)}</button>` : ''}</div>` : ''}</div>`;
 }
 function notesHTML() {
   const [t, e] = findT(S.t);
@@ -307,7 +307,7 @@ function welcome() {
     <li><span class="cmd">/grill-with-docs</span> to sharpen an idea, then <span class="cmd">/to-spec</span> and <span class="cmd">/to-tickets</span>.</li>
     <li>Or <span class="cmd">/wayfinder</span> for a big, foggy effort.</li></ol>
     <p class="faint">The board updates by itself as those files and issues appear.</p>
-    <div class="acts">${setupMissing ? '<button class="btn go" data-act="send" data-cmd="/setup-matt-pocock-skills">Send /setup-matt-pocock-skills</button>' : ''}<button class="btn" data-act="send" data-cmd="/ask-matt">Ask which flow fits</button></div></div></div>`;
+    <div class="acts">${setupMissing ? `<button class="btn go" data-act="send" data-cmd="/setup-matt-pocock-skills">${SEND()} /setup-matt-pocock-skills</button>` : ''}<button class="btn" data-act="send" data-cmd="/ask-matt">Ask which flow fits</button></div></div></div>`;
 }
 function mainHTML() {
   const warn = (ST.warnings || []).length ? `<div class="banner">${ST.warnings.map(esc).join('<br>')}</div>` : '';
@@ -338,9 +338,10 @@ function dockHTML() {
       <button class="ship add" data-act="spawn" data-cmd="">＋ New session</button></div></div>
     <div class="disp"><div class="tabs"><button class="${tab === 'q' ? 'on' : ''}" data-dtab="q">Questions for you <span class="mono" style="color:var(--s-you)">${QUESTIONS.length}</span></button><button class="${tab === 't' ? 'on' : ''}" data-dtab="t">Log · ${esc(s.id)}</button>${s.kind !== 'main' && ['running', 'waiting', 'starting'].includes(s.st) ? `<button data-act="stopsess" data-s="${esc(s.id)}" style="margin-left:auto" title="Stop this session">■ stop</button>` : ''}</div>
       <div class="body" id="dispbody">${tab === 'q' ? QUESTIONS.map(qHTML).join('') || '<p class="empty">No one is waiting on you.</p>' : logHTML(s)}</div>
-      <div class="compose"><select id="tgt">${SESSIONS.map(x => `<option value="${esc(x.id)}" ${x.id === s.id ? 'selected' : ''}>to ${esc(x.id)}</option>`).join('')}</select><input id="msgIn" placeholder="${s.kind === 'main' ? 'Message the main session (arrives via its board listener)' : 'Reply, steer, or type a /command'}"><button class="btn go" data-act="msg">Send</button></div></div>`;
+      <div class="compose"><select id="tgt">${SESSIONS.map(x => `<option value="${esc(x.id)}" ${x.id === s.id ? 'selected' : ''}>to ${esc(x.id)}</option>`).join('')}</select><input id="msgIn" placeholder="${s.kind === 'main' ? (canSend() ? 'Message the main session (arrives via its board listener)' : 'The main session can’t receive messages: Send copies your text') : 'Reply, steer, or type a /command'}"><button class="btn go" data-act="msg">Send</button></div></div>`;
 }
 function logHTML(s) {
+  if (s.kind === 'main' && !s.canReceive && s.canReceive != null) return `<p class="empty">${esc(s.hostLabel || 'This session')} can’t receive board messages, so the board copies commands for you to paste there. Background agents still take replies here.</p>`;
   if (s.kind === 'main' && !s.log.length) return `<p class="empty">${s.st === 'offline' ? 'The main session isn’t listening. Run /matt-skills-ui in it to reconnect.' : 'Messages you send to the main session appear here.'}</p>`;
   return s.log.slice(-120).map(m => `<div class="msg ${m.w === 'me' ? 'me' : m.w === 'tool' ? 'tool' : m.w === 'sys' ? 'sys' : ''}">${m.w === 'agent' || m.w === 'me' ? `<div class="w">${m.w === 'me' ? 'you' : esc(s.id)}</div>` : ''}${esc(m.t)}</div>`).join('') + (s.kind !== 'main' && (s.resume || s.sessionId) ? `<div class="msg sys">Resume in a terminal: ${esc(s.resume || 'claude --resume ' + s.sessionId)}</div>` : '');
 }
@@ -353,7 +354,7 @@ function paletteItems() {
   const out = [];
   EFFORTS.forEach(e => { out.push({ ty: e.kind, label: e.title, r: e.label, go: () => selectEff(e.id) }); e.tickets.forEach(t => out.push({ ty: 'ticket', label: t.title, r: t.label, go: () => { S.t = t.id; S.eff = e.id; S.scope = 'effort'; if (!['chart', 'board', 'ledger'].includes(S.view)) S.view = 'chart'; } })); });
   ISSUES.forEach(i => out.push({ ty: 'issue', label: i.title, r: i.label, go: () => { S.view = 'triage'; } }));
-  (ST.skills?.user || []).filter(s => s.installed).forEach(s => out.push({ ty: 'skill', label: '/' + s.name, r: 'send to main', go: () => send('/' + s.name) }));
+  (ST.skills?.user || []).filter(s => s.installed).forEach(s => out.push({ ty: 'skill', label: '/' + s.name, r: canSend() ? 'send to main' : 'copy', go: () => send('/' + s.name) }));
   [['setup', 'Skills setup'], ['triage', 'Triage'], ['artifacts', 'Artifacts'], ['glossary', 'Glossary']].forEach(([k, l]) => out.push({ ty: 'view', label: l, r: '', go: () => { S.view = k; } }));
   return out;
 }
@@ -417,7 +418,15 @@ function render() {
 /* ======================= ACTIONS ======================= */
 function toast(h) { const d = document.createElement('div'); d.innerHTML = h; document.getElementById('toast').appendChild(d); setTimeout(() => d.remove(), 3200); }
 const fail = e => toast(`Failed: <b>${esc(e.message)}</b>`);
-function send(cmd) { return api('/api/send', { to: 'main', text: cmd }).then(() => toast(`Sent <b>${esc(cmd)}</b> to the main session`), fail); }
+// Only a Claude Code main session (or anything running `cli.mjs listen`) can receive; for others the board copies instead.
+const mainSession = () => SESSIONS.find(x => x.kind === 'main');
+const canSend = () => mainSession()?.canReceive !== false;
+const SEND = () => canSend() ? 'Send' : 'Copy';
+function copyForMain(text) {
+  const where = mainSession()?.hostLabel ? `your ${esc(mainSession().hostLabel)} session` : 'your agent';
+  return (navigator.clipboard?.writeText(text) || Promise.reject()).then(() => toast(`Copied <b>${esc(text)}</b>. Paste it into ${where}.`), () => toast(`Paste into ${where}: <b>${esc(text)}</b>`));
+}
+function send(cmd) { if (!canSend()) return copyForMain(cmd); return api('/api/send', { to: 'main', text: cmd }).then(() => toast(`Sent <b>${esc(cmd)}</b> to the main session`), fail); }
 function selectEff(id) { const e = effById(id); S.eff = id; S.scope = 'effort'; if (!['chart', 'board', 'ledger'].includes(S.view)) S.view = 'chart'; if (!findT(S.t)[1] || findT(S.t)[1].id !== id) S.t = e.tickets.find(t => ['ready', 'you', 'progress'].includes(stateOf(t, e)))?.id || e.tickets[0]?.id || null; }
 function goTheme(k, save) { V = k; S.vb = null; S.boot = true; S.drawn.clear(); if (save) api('/api/theme', { theme: SLUG[k] }).catch(fail); try { localStorage.setItem('msu.lastTheme', SLUG[k]); } catch {} render(); }
 document.addEventListener('click', ev => {
@@ -451,6 +460,7 @@ document.addEventListener('click', ev => {
   if (a === 'stopsess') { api('/api/stop-session', { id: d.s }).then(() => toast(`Stopping <b>${esc(d.s)}</b>`), fail); return; }
   if (a === 'msg') {
     const inp = document.getElementById('msgIn'), txt = inp?.value.trim(); if (!txt) return; const to = document.getElementById('tgt').value;
+    if (to === 'main' && !canSend()) { inp.value = ''; return copyForMain(txt); }
     const q = S.replyTo && QUESTIONS.find(x => x.id === S.replyTo && x.from === to); S.replyTo = null; inp.value = '';
     (q ? api('/api/answer', { qid: q.id, answer: txt }) : api('/api/send', { to, text: txt })).then(() => toast(`Sent to <b>${esc(to)}</b>`), fail); return; }
   if (a === 'watch') { S.sess = d.s; S.dtab = 't'; return render(); }

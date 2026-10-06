@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Matt Skills UI server. Usually started by `cli.mjs start`, not directly.
-//   node server.mjs --repo <dir> [--port 0] [--session <claude-session-id>]
+//   node server.mjs --repo <dir> [--port 0] [--session <claude-session-id>] [--host <agent>]
 // Binds 127.0.0.1 only. Every /api call needs the per-run token (header x-msu-token or ?token=),
 // and cross-origin requests are refused, so other local pages can't drive your sessions.
 import http from 'node:http';
@@ -28,7 +28,7 @@ const clients = new Set();
 let bt = null; // before Sessions: setMain() below already broadcasts
 const sessions = new Sessions({ repo, dataDir: DATA, cliPath: path.join(here, 'cli.mjs'), onChange: () => broadcast('sessions') });
 await sessions.load();
-sessions.setMain(arg('session', null));
+sessions.setMain(arg('session', null), arg('host', null));
 
 async function rebuild() {
   if (building) { rebuildAgain = true; return building; }
@@ -89,7 +89,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/stop-session' && POST) { const b = await body(req); sessions.stop(b.id); return json(res, 200, { ok: true }); }
     if (p === '/api/questions' && POST) { const b = await body(req); if (!b.q) return json(res, 400, { error: 'q required' }); return json(res, 200, { ok: true, id: sessions.addQuestion({ from: 'main', q: String(b.q), rec: String(b.rec || ''), opts: [].concat(b.opts || []).map(String), ref: String(b.ref || '') }) }); }
     if (p === '/api/outbox') { const msgs = await sessions.waitOutbox(url.searchParams.get('wait') ? 25000 : 0); broadcast(); return json(res, 200, { messages: msgs }); }
-    if (p === '/api/main' && POST) { const b = await body(req); sessions.setMain(b.session); return json(res, 200, { ok: true }); }
+    if (p === '/api/main' && POST) { const b = await body(req); sessions.setMain(b.session, b.host); return json(res, 200, { ok: true }); }
     if (p === '/api/theme' && POST) { const b = await body(req); await writeThemeOverride(b.theme || null); broadcast(); return json(res, 200, { ok: true, theme: await readTheme() }); }
     if (p === '/api/shutdown' && POST) { json(res, 200, { ok: true }); setTimeout(shutdown, 50); return; }
     return json(res, 404, { error: 'unknown endpoint' });
