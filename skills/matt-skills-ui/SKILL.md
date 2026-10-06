@@ -10,7 +10,7 @@ The board is a local web server (one per repo) that reads what mattpocock/skills
 ## 1. Run the command
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/../../server/cli.mjs" $ARGUMENTS --repo "${CLAUDE_PROJECT_DIR}" --session "${CLAUDE_SESSION_ID}"
+node "${CLAUDE_SKILL_DIR}/server/cli.mjs" $ARGUMENTS --repo "${CLAUDE_PROJECT_DIR}" --session "${CLAUDE_SESSION_ID}"
 ```
 
 Show the user its output verbatim (it holds the board URL). For `stop`, `status` or `theme`, you are done after this step.
@@ -20,7 +20,7 @@ Show the user its output verbatim (it holds the board URL). For `stop`, `status`
 Start the Monitor tool with this command, description "Matt Skills UI board messages", and `timeout_ms` 1800000:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/../../server/cli.mjs" listen --repo "${CLAUDE_PROJECT_DIR}"
+node "${CLAUDE_SKILL_DIR}/server/cli.mjs" listen --repo "${CLAUDE_PROJECT_DIR}"
 ```
 
 Done when the monitor is armed. When it expires, re-arm it, unless its last line says the board has stopped.
@@ -34,7 +34,7 @@ Each event line `[matt-skills-ui] From the board: <text>` is the user typing on 
 While the board runs, whenever you ask the user a decision question (grilling rounds included), also post it so they can answer from the board:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/../../server/cli.mjs" ask --repo "${CLAUDE_PROJECT_DIR}" "<question>" --rec "<your recommended answer>" --options "<a>|<b>" --ref "<ticket ref, if any>"
+node "${CLAUDE_SKILL_DIR}/server/cli.mjs" ask --repo "${CLAUDE_PROJECT_DIR}" "<question>" --rec "<your recommended answer>" --options "<a>|<b>" --ref "<ticket ref, if any>"
 ```
 
 Their answer comes back as a step-3 event; an answer typed in the terminal counts too.
