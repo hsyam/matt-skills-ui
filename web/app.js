@@ -342,7 +342,7 @@ function dockHTML() {
 }
 function logHTML(s) {
   if (s.kind === 'main' && !s.log.length) return `<p class="empty">${s.st === 'offline' ? 'The main session isn’t listening. Run /matt-skills-ui in it to reconnect.' : 'Messages you send to the main session appear here.'}</p>`;
-  return s.log.slice(-120).map(m => `<div class="msg ${m.w === 'me' ? 'me' : m.w === 'tool' ? 'tool' : m.w === 'sys' ? 'sys' : ''}">${m.w === 'agent' || m.w === 'me' ? `<div class="w">${m.w === 'me' ? 'you' : esc(s.id)}</div>` : ''}${esc(m.t)}</div>`).join('') + (s.sessionId && s.kind !== 'main' ? `<div class="msg sys">Resume in a terminal: claude --resume ${esc(s.sessionId)}</div>` : '');
+  return s.log.slice(-120).map(m => `<div class="msg ${m.w === 'me' ? 'me' : m.w === 'tool' ? 'tool' : m.w === 'sys' ? 'sys' : ''}">${m.w === 'agent' || m.w === 'me' ? `<div class="w">${m.w === 'me' ? 'you' : esc(s.id)}</div>` : ''}${esc(m.t)}</div>`).join('') + (s.kind !== 'main' && (s.resume || s.sessionId) ? `<div class="msg sys">Resume in a terminal: ${esc(s.resume || 'claude --resume ' + s.sessionId)}</div>` : '');
 }
 function qHTML(q) {
   return `<div class="q"><div class="from"><span class="who" style="--c:var(--s-you)">${esc(q.skill || 'question')}</span>${esc(q.from)} is waiting${q.ref ? ` · <span class="chip" data-t="${esc(q.ref)}">${esc(findT(q.ref)[0]?.label || q.ref)}</span>` : ''}</div>
@@ -374,16 +374,20 @@ function pickerHTML() {
       <div class="cap"><b>${THEMES[k][0]}</b><span>${k === inst ? 'install default' : THEMES[k][1].split(' · ')[0]}</span></div></button>`).join('')}</div>
     <div class="foot"><span>Install default: <b>${THEMES[inst][0]}</b> (<code>/config</code> → plugin options). ${over ? `Overridden here with <b>${THEMES[FROM_SLUG[over]][0]}</b>.` : 'No override.'} Also <code>/matt-skills-ui theme transit</code>.</span>${over ? '<button class="btn" data-act="themereset">Use default</button>' : ''}</div></div>`;
 }
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const AGENTS = () => ST.agents || [{ id: 'claude', label: 'Claude Code', bin: 'claude', installed: true, tested: true, modes: ['default', 'acceptEdits', 'auto', 'plan'], defaultMode: 'acceptEdits', modeHelp: '' }];
+const agentById = id => AGENTS().find(a => a.id === id);
 function spawnHTML() {
-  const sp = S.spawn, modes = ST.permissionModes || ['default', 'acceptEdits', 'auto', 'plan'];
-  let mode = 'acceptEdits'; try { mode = localStorage.getItem('msu.mode') || mode; } catch {}
+  const sp = S.spawn, list = AGENTS(), ag = agentById(sp.agent) || list[0];
+  const saved = store.get('msu.mode.' + ag.id) || (ag.id === 'claude' ? store.get('msu.mode') : null), mode = ag.modes.includes(saved) ? saved : ag.defaultMode;
   return `<div class="dlg" data-act="spawnclose"><div class="box"><h4>Spawn a background session</h4>
-    <p class="faint" style="margin:0;font-size:12px">Runs <span class="mono">claude -p</span> headless from this board. Its log, questions and replies show in the dock; you can resume it in a terminal later.</p>
+    <p class="faint" style="margin:0;font-size:12px">Runs <span class="mono">${esc(ag.bin)}</span> headless from this board. Its log, questions and replies show in the dock; you can resume it in a terminal later.</p>
     <textarea id="spPrompt" placeholder="/implement … or any prompt">${esc(sp.cmd)}</textarea>
-    <div class="row"><label>Permission mode <select id="spMode">${modes.map(m => `<option ${m === mode ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+    <div class="row"><label>Agent <select id="spAgent">${list.map(a => `<option value="${a.id}" ${a.id === ag.id ? 'selected' : ''} ${a.installed ? '' : 'disabled'}>${esc(a.label)}${a.installed ? (a.tested ? '' : ' · untested') : ' · not installed'}</option>`).join('')}</select></label>
+      <label>${ag.id === 'claude' ? 'Permission mode' : 'Mode'} <select id="spMode">${ag.modes.map(m => `<option ${m === mode ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
       <label><input type="checkbox" id="spWt" ${sp.worktree ? 'checked' : ''}> Own git worktree</label></div>
-    <p class="warn">Headless sessions can’t ask for permission: anything your settings don’t allow is denied. <b>acceptEdits</b> lets it edit files; <b>auto</b> lets Claude decide; <b>plan</b> is read-only.</p>
-    <div class="acts"><button class="btn go" data-act="spawngo">Spawn</button><button class="btn quiet" data-act="spawnclose">Cancel</button></div></div></div>`;
+    <p class="warn">Headless sessions can’t ask for permission: anything not allowed is denied. ${ag.modeHelp || ''}${ag.tested ? '' : ` <b>Untested:</b> this adapter follows ${esc(ag.label)}’s docs but hasn’t run against the real CLI yet.`}</p>
+    <div class="acts"><button class="btn go" data-act="spawngo" ${ag.installed ? '' : 'disabled'}>Spawn</button><button class="btn quiet" data-act="spawnclose">Cancel</button></div></div></div>`;
 }
 function render() {
   if (!ST) return;
@@ -435,13 +439,13 @@ document.addEventListener('click', ev => {
   if (a === 'awaits') { S.dtab = 'q'; return render(); }
   if (a === 'copy') { navigator.clipboard?.writeText(d.cmd).then(() => toast(`Copied <b>${esc(d.cmd)}</b>`), () => toast(`Copy: <b>${esc(d.cmd)}</b>`)); return; }
   if (a === 'send') { send(d.cmd); return; }
-  if (a === 'spawn') { S.spawn = { cmd: d.cmd || '', ref: d.ref || null, worktree: /^\/implement\b/.test(d.cmd || '') }; render(); document.getElementById('spPrompt')?.focus(); return; }
+  if (a === 'spawn') { const last = agentById(store.get('msu.agent')); S.spawn = { cmd: d.cmd || '', ref: d.ref || null, agent: last?.installed ? last.id : (AGENTS().find(x => x.installed) || AGENTS()[0]).id, worktree: /^\/implement\b/.test(d.cmd || '') }; render(); document.getElementById('spPrompt')?.focus(); return; }
   if (a === 'spawngo') {
-    const prompt = document.getElementById('spPrompt').value.trim(), mode = document.getElementById('spMode').value, worktree = document.getElementById('spWt').checked;
+    const prompt = document.getElementById('spPrompt').value.trim(), agent = document.getElementById('spAgent').value, mode = document.getElementById('spMode').value, worktree = document.getElementById('spWt').checked;
     if (!prompt) return toast('Write a prompt first');
-    try { localStorage.setItem('msu.mode', mode); } catch {}
+    store.set('msu.agent', agent); store.set('msu.mode.' + agent, mode);
     const ref = S.spawn.ref, t = ref ? findT(ref)[0] : null; S.spawn = null; render();
-    api('/api/spawn', { prompt, ticket: ref, mode, worktree, name: t ? t.title : prompt.slice(0, 50) }).then(r => { S.sess = r.id; S.dtab = 't'; toast(`Spawned <b>${esc(r.id)}</b>`); }, fail); return; }
+    api('/api/spawn', { prompt, ticket: ref, agent, mode, worktree, name: t ? t.title : prompt.slice(0, 50) }).then(r => { S.sess = r.id; S.dtab = 't'; toast(`Spawned <b>${esc(r.id)}</b>`); }, fail); return; }
   if (a === 'answer') { api('/api/answer', { qid: d.q, answer: d.a }).then(() => toast('Answer sent'), fail); return; }
   if (a === 'reply') { S.sess = d.s; S.dtab = 't'; S.replyTo = d.q; render(); const i = document.getElementById('msgIn'); if (i) { i.placeholder = 'Your answer…'; i.focus(); } return; }
   if (a === 'stopsess') { api('/api/stop-session', { id: d.s }).then(() => toast(`Stopping <b>${esc(d.s)}</b>`), fail); return; }
@@ -458,6 +462,9 @@ document.addEventListener('click', ev => {
   if (d.iss) { S.view = 'triage'; return render(); }
   if (d.eff) { selectEff(d.eff); return render(); }
   if (d.t) { const [t, e] = findT(d.t); if (!t) return; S.t = d.t; if (S.scope === 'effort') S.eff = e.id; if (!['chart', 'board', 'ledger'].includes(S.view)) { S.view = 'chart'; S.eff = e.id; S.scope = 'effort'; } S.wide = false; return render(); }
+});
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'spAgent' && S.spawn) { S.spawn.cmd = document.getElementById('spPrompt').value; S.spawn.worktree = document.getElementById('spWt').checked; S.spawn.agent = ev.target.value; render(); }
 });
 document.addEventListener('input', ev => { if (ev.target.id === 'palIn') { S.pal = ev.target.value; S.palI = 0; render(); } });
 document.addEventListener('focusout', () => { if (renderSoon) setTimeout(() => { if (!document.activeElement?.closest?.('input,textarea,select') && !S.pal && !S.spawn) render(); }, 200); });
