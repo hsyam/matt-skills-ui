@@ -9,7 +9,8 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildModel } from './lib/model.mjs';
-import { Sessions, PERMISSION_MODES } from './lib/sessions.mjs';
+import { Sessions } from './lib/sessions.mjs';
+import { agentList } from './lib/agents.mjs';
 import { repoDataDir, writeJson, readJson, dataDir, THEMES } from './lib/util.mjs';
 import { readTheme, writeThemeOverride } from './lib/config.mjs';
 
@@ -35,7 +36,7 @@ async function rebuild() {
   broadcast('state');
   if (rebuildAgain) { rebuildAgain = false; rebuild(); }
 }
-const statePayload = async () => ({ ...model, sessions: sessions.all(), questions: sessions.questions, theme: await readTheme(), themes: THEMES, permissionModes: PERMISSION_MODES, remoteAt: remoteCache.at });
+const statePayload = async () => ({ ...model, sessions: sessions.all(), questions: sessions.questions, theme: await readTheme(), themes: THEMES, agents: agentList(), remoteAt: remoteCache.at });
 let bt = null;
 function broadcast() { clearTimeout(bt); bt = setTimeout(async () => { const data = `event: state\ndata: ${JSON.stringify(await statePayload())}\n\n`; for (const c of clients) c.write(data); }, 120); }
 
@@ -81,7 +82,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/send' && POST) { const b = await body(req); if (!b.text) return json(res, 400, { error: 'text required' }); return json(res, 200, { ok: sessions.send(b.to || 'main', String(b.text)) }); }
     if (p === '/api/spawn' && POST) {
       const b = await body(req); if (!b.prompt) return json(res, 400, { error: 'prompt required' });
-      const s = await sessions.spawn({ prompt: String(b.prompt), name: b.name, ticket: b.ticket || null, mode: b.mode, worktree: !!b.worktree, model: b.model || null });
+      const s = await sessions.spawn({ prompt: String(b.prompt), name: b.name, ticket: b.ticket || null, agent: b.agent, mode: b.mode, worktree: !!b.worktree, model: b.model || null });
       return json(res, 200, { ok: true, id: s.id });
     }
     if (p === '/api/answer' && POST) { const b = await body(req); return json(res, 200, { ok: sessions.answer(b.qid, String(b.answer || '')) }); }
