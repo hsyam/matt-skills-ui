@@ -251,7 +251,8 @@ export class Sessions {
     else if (ev.k === 'error') s.log.push({ w: 'sys', t: 'Error: ' + ev.t });
     else if (ev.k === 'end') { if (!a.persistent) { s._end = ev; return; } this.finishTurn(s, ev); }
     else return;
-    if (s.log.length > 400) s.log.splice(0, s.log.length - 400);
+    // `cut` counts trimmed lines so the board can tell new messages from a log that stays at 400.
+    if (s.log.length > 400) s.cut = (s.cut || 0) + s.log.splice(0, s.log.length - 400).length;
     this.changed();
   }
   finishTurn(s, ev) {

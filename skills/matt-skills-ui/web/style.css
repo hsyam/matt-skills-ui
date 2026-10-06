@@ -203,10 +203,19 @@ table.ledger{width:100%;border-collapse:collapse}
 .msg{max-width:88%;padding:6px 10px;border-radius:var(--r);background:var(--bg);border:1px solid var(--line);font-size:12.5px}
 .msg .w{font-size:10.5px;color:var(--fg3)}
 .msg.me{align-self:flex-end;background:var(--bg3)}
-.compose{display:flex;gap:6px;padding:8px 12px 10px;border-top:1px solid var(--line)}
-.compose select,.compose input{background:var(--bg);border:1px solid var(--line2);border-radius:var(--r);padding:5px 8px;font-size:12px;color:var(--fg)}
-.compose select{max-width:120px}
-.compose input{flex:1;min-width:0}
+.compose{padding:8px 12px 10px;border-top:1px solid var(--line)}
+.cbox{display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line2);border-radius:var(--r);transition:border-color .15s,box-shadow .15s}
+.cbox:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklch,var(--accent) 22%,transparent)}
+.cbox.ask{border-color:var(--s-you)} .cbox.ask:focus-within{box-shadow:0 0 0 3px color-mix(in oklch,var(--s-you) 24%,transparent)}
+.cbox textarea{display:block;width:100%;min-height:44px;max-height:168px;padding:9px 11px 2px;border:0;background:transparent;color:var(--fg);font-size:13.5px;line-height:1.45;resize:none;overflow-y:auto;outline:none}
+.cbox textarea::placeholder{color:var(--fg3)}
+.cbox textarea:focus-visible{outline:none}
+.cbar{display:flex;align-items:center;gap:8px;padding:4px 6px 6px 8px;min-width:0}
+.cbar select{flex:none;max-width:140px;padding:2px 6px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg2);color:var(--fg2);font-size:11.5px}
+.cbar .hint{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden}
+.cbar .hint .kbd{margin-left:6px} .cbar .hint .kbd:first-child{margin-left:0}
+.cbar .btn{flex:none}
+.cbox:not(:focus-within) .hint{opacity:.55}
 .empty{color:var(--fg3);text-align:center;padding:14px}
 
 .scrim{position:fixed;inset:0;background:color-mix(in oklch,var(--fg) 22%,transparent);z-index:60;display:flex;justify-content:center;align-items:flex-start;padding-top:12vh;animation:fadein .15s forwards;opacity:0}
@@ -447,7 +456,7 @@ table.ledger{width:100%;border-collapse:collapse}
 [data-theme=D] .await{border:2.5px solid var(--fg);box-shadow:3px 3px 0 var(--fg)}
 [data-theme=D] .seek{border:2.5px solid var(--fg);background:var(--bg)}
 [data-theme=D] .disp .tabs{border-bottom:2px solid var(--fg)}
-[data-theme=D] .compose{border-top:2px solid var(--fg)} [data-theme=D] .compose input,[data-theme=D] .compose select{border:2px solid var(--fg)}
+[data-theme=D] .compose{border-top:2px solid var(--fg)}
 [data-theme=D] .st::before{border:1.5px solid var(--fg)}
 [data-theme=D] #toast div{border:2px solid var(--fg)}
 
@@ -488,3 +497,53 @@ table.ledger{width:100%;border-collapse:collapse}
 }
 @media (max-height:680px){ .route{display:none} .head .gist{display:none} .next p{-webkit-line-clamp:1} }
 [data-theme=C] .setup small,[data-theme=C] .setup b{white-space:nowrap} [data-theme=C] .setup{flex:none}
+
+/* ---- dock chat: bigger mode, new lines, unread, working ---- */
+.app{transition:grid-template-rows .32s cubic-bezier(.22,1,.36,1),grid-template-columns .32s cubic-bezier(.22,1,.36,1)}
+.app.chat .dock{grid-template-columns:minmax(0,1fr) minmax(430px,54%)}
+[data-theme=A] .app.chat{grid-template-rows:64px minmax(0,1fr) min(58vh,560px)}
+[data-theme=B] .app.chat{grid-template-rows:minmax(0,1fr) min(58vh,560px) 26px}
+[data-theme=C] .app.chat{grid-template-rows:58px 50px minmax(0,1fr) min(58vh,560px)}
+[data-theme=D] .app.chat{grid-template-columns:226px minmax(0,1fr) 470px;grid-template-rows:68px minmax(0,.45fr) minmax(0,1.55fr)}
+[data-theme=D] .app.chat .dock{grid-template-columns:1fr}
+.app.chat .msg{font-size:13px}
+.disp .tabs .tr{margin-left:auto;display:flex;gap:2px;align-items:center}
+.disp .tabs .tr button{border-bottom-color:transparent}
+.disp .tabs [data-act=chatsize]{font-size:14px;padding:3px 8px;color:var(--fg3)} .disp .tabs [data-act=chatsize]:hover{color:var(--fg)}
+.bodyw{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.jump{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);padding:3px 11px;border-radius:99px;background:var(--fg);color:var(--bg);font-size:11.5px;font-weight:600;box-shadow:0 4px 14px color-mix(in oklch,var(--fg) 25%,transparent);animation:slip .3s cubic-bezier(.22,1,.36,1)}
+.msg.agent{border-left:3px solid var(--accent)}
+.msg.new{animation:msgin .42s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+@keyframes msgin{from{opacity:0;transform:translateY(10px)}}
+.msg.agent.new{animation-name:msgin,glow;animation-duration:.42s,2.4s}
+@keyframes glow{0%,30%{background:color-mix(in oklch,var(--accent) 14%,var(--bg))}}
+.typing{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:11.5px;color:var(--fg3);min-width:0}
+.typing>span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-m)}
+.typing .dots{display:flex;gap:3px;flex:none}
+.typing .dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:bob 1.2s infinite ease-in-out}
+.typing .dots i:nth-child(2){animation-delay:.15s} .typing .dots i:nth-child(3){animation-delay:.3s}
+@keyframes bob{0%,60%,100%{transform:none;opacity:.35}30%{transform:translateY(-3px);opacity:1}}
+.ship .t .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.unread{margin-left:auto;flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-fg,#fff);font:700 10.5px/18px var(--font-m);text-align:center}
+.ship.fresh{border-color:var(--accent);animation:nudge 1.6s ease-out 2}
+@keyframes nudge{0%{box-shadow:0 0 0 0 color-mix(in oklch,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+#toast .note{cursor:pointer;max-width:340px;display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--accent)}
+#toast .note span{opacity:.82;font-size:12px;line-height:1.35}
+#toast .note[data-tab=q]{border-left-color:var(--s-you)}
+/* theme accents for the chat box */
+[data-theme=B] .cbox textarea{font-family:var(--font-m);font-size:12.5px}
+[data-theme=B] .cbox:focus-within{box-shadow:none;outline:1px solid var(--accent)}
+[data-theme=B] .msg.agent{border-left-width:2px}
+[data-theme=C] .cbox{border-radius:14px} [data-theme=C] .cbar select{border-radius:99px} [data-theme=C] .msg{border-radius:12px} [data-theme=C] .msg.agent{border-left:1px solid var(--line);border-bottom-left-radius:4px} [data-theme=C] .msg.me{border-bottom-right-radius:4px}
+[data-theme=D] .cbox{border:2px solid var(--fg);border-radius:12px} [data-theme=D] .cbox:focus-within{border-color:var(--fg);box-shadow:4px 4px 0 var(--fg)}
+[data-theme=D] .cbox.ask{background:color-mix(in oklch,var(--s-you) 18%,var(--bg))} [data-theme=D] .cbar select{border:2px solid var(--fg)}
+[data-theme=D] .msg{border:2px solid var(--fg);border-radius:10px} [data-theme=D] .msg.tool,[data-theme=D] .msg.sys{border-width:0}
+[data-theme=D] .unread{border:2px solid var(--fg);line-height:14px} [data-theme=D] .jump{border:2px solid var(--fg);box-shadow:3px 3px 0 var(--fg)}
+/* normal dock: one compact row (target · growing box · send); bigger chat gets the roomy two-row box */
+.app:not(.chat) .cbox{flex-direction:row;align-items:flex-end;gap:6px;padding:4px 5px 4px 6px}
+.app:not(.chat) .cbar{display:contents}
+.app:not(.chat) .cbar select{order:-1;align-self:center;max-width:136px}
+.app:not(.chat) .cbar .hint{display:none}
+.app:not(.chat) .cbox textarea{min-height:30px;max-height:96px;padding:5px 4px}
+.app:not(.chat) .compose{padding:6px 10px 8px}
+.cbox textarea:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
