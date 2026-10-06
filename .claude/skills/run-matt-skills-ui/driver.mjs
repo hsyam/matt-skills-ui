@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const CLI = path.join(ROOT, 'server/cli.mjs');
+const CLI = path.join(ROOT, 'skills/matt-skills-ui/server/cli.mjs');
 const HOME = process.env.MATT_SKILLS_UI_HOME || path.join(os.tmpdir(), 'matt-skills-ui-driver');
 const SHOTS = path.join(os.tmpdir(), 'matt-skills-ui-shots');
 const env = { ...process.env, MATT_SKILLS_UI_HOME: HOME };

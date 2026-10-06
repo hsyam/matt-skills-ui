@@ -31,10 +31,10 @@ Most changes touch the readers or the next-move engine; test those without a ser
 
 ```bash
 npm test                                                           # node --test test/*.test.mjs
-node -e "import('./server/lib/model.mjs').then(async m => console.log(JSON.stringify(await m.buildModel('test/fixtures/acme-local'), null, 1)))"
+node -e "import('./skills/matt-skills-ui/server/lib/model.mjs').then(async m => console.log(JSON.stringify(await m.buildModel('test/fixtures/acme-local'), null, 1)))"
 ```
 
-`web/engine.mjs` is plain ESM shared by the browser and node: import it, `bind(state)`, call `nextFor` / `effortNext` / `stateOf`.
+`skills/matt-skills-ui/web/engine.mjs` is plain ESM shared by the browser and node: import it, `bind(state)`, call `nextFor` / `effortNext` / `stateOf`.
 
 ## Run (human path)
 
@@ -53,7 +53,7 @@ Then `/matt-skills-ui` (opens the browser), `/matt-skills-ui theme toybox`, `/ma
 - **There's no `timeout` command on macOS.** To bound a process use `perl -e 'alarm 30; exec @ARGV' …`.
 - `node --test test/` fails on Node 24 because the directory is treated as a module. Use the glob (`npm test`).
 - **Skill bodies substitute** `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}`, `${CLAUDE_SESSION_ID}` and `$ARGUMENTS`. They do not substitute `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` or `${user_config.*}`. So the theme picked at install is read from `pluginConfigs` in `~/.claude/settings.json` (`server/lib/config.mjs`), and data lives in `~/.matt-skills-ui`.
-- **Spawned agents** go through the adapters in `server/lib/agents.mjs`. Claude runs `claude -p --input-format stream-json --output-format stream-json --verbose`. `--verbose` is required with stream-json. Each `result` event ends a turn, and the process stays alive waiting on stdin, which is how board replies continue the conversation. Every other agent runs one process per turn, and the next turn resumes the session id from the first turn's output. Their parser tests replay real CLI output from `test/fixtures/agents/`.
+- **Spawned agents** go through the adapters in `skills/matt-skills-ui/server/lib/agents.mjs`. Claude runs `claude -p --input-format stream-json --output-format stream-json --verbose`. `--verbose` is required with stream-json. Each `result` event ends a turn, and the process stays alive waiting on stdin, which is how board replies continue the conversation. Every other agent runs one process per turn, and the next turn resumes the session id from the first turn's output. Their parser tests replay real CLI output from `test/fixtures/agents/`.
 - **Spawned agents get `PWD` set to their working directory, and the preamble names the realpath.** The server's own `PWD` leaks otherwise, and OpenCode takes its project root from `PWD`. It then auto-rejects reads of the real repo as `external_directory`, and the turn ends silently (the rejection only shows on stderr). macOS's `/var` → `/private/var` symlink causes the same rejection.
 - **`codex exec` reads stdin when it's piped**, so the adapter sends the prompt there (`-`). `opencode run` takes it after `--`, so a prompt starting with `-` isn't read as a flag.
 - **Headless agents can't ask for permission.** Anything the settings don't allow is denied, so pick `acceptEdits`/`auto` for implementers.

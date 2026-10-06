@@ -354,9 +354,9 @@ No build step and no dependencies. Project layout:
 
 ```
 .claude-plugin/          plugin.json (manifest, theme option) and marketplace.json
-skills/matt-skills-ui/   the /matt-skills-ui command
-server/                  cli.mjs, server.mjs, and lib/ (local, GitHub and GitLab readers, setup scan, sessions, agent adapters)
-web/                     index.html, app.js (UI), engine.mjs (next-move logic, shared with tests), style.css (all four themes)
+skills/matt-skills-ui/   the skill (SKILL.md), with the board inside it so `npx skills add` copies everything:
+  server/                cli.mjs, server.mjs, and lib/ (local, GitHub and GitLab readers, setup scan, sessions, agent adapters)
+  web/                   index.html, app.js (UI), engine.mjs (next-move logic, shared with tests), style.css (all four themes)
 test/                    unit tests and fixtures/acme-local (a repo in the skills' exact formats)
 .claude/skills/run-matt-skills-ui/   driver for agents: smoke tests, screenshots, real spawn test
 docs/                    screenshots and design history

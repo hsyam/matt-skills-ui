@@ -4,8 +4,8 @@ import { readFileSync, mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AGENTS } from '../server/lib/agents.mjs';
-import { Sessions } from '../server/lib/sessions.mjs';
+import { AGENTS } from '../skills/matt-skills-ui/server/lib/agents.mjs';
+import { Sessions } from '../skills/matt-skills-ui/server/lib/sessions.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'agents');
 const feed = (agent, lines) => { const p = AGENTS[agent].parser(); return lines.flatMap(l => p(typeof l === 'string' ? l : JSON.stringify(l))); };
