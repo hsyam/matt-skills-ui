@@ -1,0 +1,14 @@
+{
+  "name": "matt-skills-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unofficial web UI for mattpocock/skills (Claude Code plugin).",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node .claude/skills/run-matt-skills-ui/driver.mjs smoke",
+    "validate": "claude plugin validate . && claude plugin validate .claude-plugin/plugin.json"
+  }
+}
