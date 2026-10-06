@@ -1,6 +1,6 @@
 # Matt Skills UI
 
-**A live web board for [mattpocock/skills](https://github.com/mattpocock/skills), as a Claude Code plugin.**
+**A live web board for [mattpocock/skills](https://github.com/mattpocock/skills), as a Claude Code plugin or a skill for any agent.**
 Type `/matt-skills-ui` and your browser opens on everything those skills have written in your repo: specs, tickets and wayfinder maps drawn as a dependency graph, what's blocked and what's ready, and the exact next command for each item. From the same page you can spawn background agents and answer their questions.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-black.svg)](LICENSE)
@@ -69,7 +69,7 @@ You pick a theme when you install the plugin and can change it at any time. Ever
 
 | What | Why |
 |---|---|
-| [Claude Code](https://code.claude.com) 2.1.271 or newer | Plugin options with a fixed choice list (the theme picker) need 2.1.271+. Tested on 2.1.290. |
+| [Claude Code](https://code.claude.com) 2.1.271 or newer, **or** any agent that reads skills | For the plugin: options with a fixed choice list (the theme picker) need 2.1.271+. Tested on 2.1.290. As a skill: tested with OpenCode 1.18; it follows the [Agent Skills](https://agentskills.io) format, so Codex, Cursor, Pi, Gemini CLI, Antigravity and others should work too. |
 | Node.js 20+ | Runs the board server. Nothing to `npm install`. |
 | [mattpocock/skills](https://github.com/mattpocock/skills) | The board shows what these skills write. |
 | `gh`, logged in | Only if your issue tracker is GitHub. |
@@ -140,6 +140,29 @@ The command will:
 
 That's it. Keep the session open while you use the board; it's the "main session" the board talks to.
 
+### Other agents: OpenCode, Codex, Cursor, Pi, Gemini CLI, Antigravity…
+
+Install it as a skill with [skills.sh](https://skills.sh), the same way you installed Matt's skills:
+
+```bash
+npx skills add hsyam/matt-skills-ui
+```
+
+The board's code comes along inside the skill folder. Then ask your agent to open it, for example "use the matt-skills-ui skill", or `/matt-skills-ui` in agents that turn skills into commands. It also takes `stop`, `status` and `theme <name>`.
+
+What differs from Claude Code:
+
+| | Claude Code | Other agents |
+|---|---|---|
+| Board, graph, triage, setup health | ✅ | ✅ |
+| Spawn background agents and answer them | ✅ | ✅ |
+| **Send to main** and messages from the board | ✅ arrive in your session | Become **Copy**: paste the command into your agent yourself |
+| Your session's questions mirrored to the board | ✅ | — |
+| Main-session context gauge | ✅ | — |
+| Theme chosen at install | Plugin option | Use the board's ◐ Theme button |
+
+Only Claude Code has a tool that can stream board messages into a running chat, so the rest are left out rather than half-working.
+
 ### Try it without installing
 
 Clone the repo and load it for one session:
@@ -180,7 +203,7 @@ The board recommends the step the skills' own flow calls for:
 
 ### Send to main, Spawn agent, or Copy
 
-- **Send to main** delivers the command to the Claude Code session that opened the board, as if you typed it there.
+- **Send to main** delivers the command to the Claude Code session that opened the board, as if you typed it there. When another agent opened the board, this button isn't shown and other Send buttons copy instead.
 - **Spawn agent** starts a separate background session. A dialog lets you edit the prompt and choose:
   - **Agent.** Any of these CLIs found on your `PATH`. The board remembers your last pick.
 
@@ -233,7 +256,7 @@ The agent continues as soon as you answer. Your main session posts its questions
 
 | Command | What it does |
 |---|---|
-| `/matt-skills-ui` | Start or reuse the board for this repo, open it, and listen for board messages |
+| `/matt-skills-ui` | Start or reuse the board for this repo, open it, and (in Claude Code) listen for board messages |
 | `/matt-skills-ui status` | Show whether it's running, plus counts of efforts, issues, sessions and questions |
 | `/matt-skills-ui stop` | Stop the board, along with any agents it spawned |
 | `/matt-skills-ui theme <name>` | Switch to `swiss`, `terminal`, `transit` or `toybox` |
@@ -343,7 +366,7 @@ The board itself is free. Spawned agents are normal sessions of that agent, bill
 Yes. The board and the terminal see the same files. Answers typed in either place count.
 
 **Does it work with Codex or other agents?**
-The board reads the same files no matter which agent wrote them, and you can spawn OpenCode and Codex agents (Cursor, Gemini CLI and Pi untested) from it. Opening the board with `/matt-skills-ui` and messaging the main session still need Claude Code.
+Yes. Install it with `npx skills add hsyam/matt-skills-ui` and any agent that reads skills can open the board (see [Other agents](#other-agents-opencode-codex-cursor-pi-gemini-cli-antigravity)). From the board you can spawn Claude Code, OpenCode and Codex agents (Cursor, Gemini CLI and Pi untested). Only messaging the main session needs Claude Code.
 
 **Does it work offline?**
 Yes, apart from the web fonts, which load from Google Fonts and fall back to system fonts when offline.
@@ -366,7 +389,7 @@ Common commands:
 
 ```bash
 npm test                                                     # unit tests
-node .claude/skills/run-matt-skills-ui/driver.mjs smoke      # real server against the fixture: 13 end-to-end checks
+node .claude/skills/run-matt-skills-ui/driver.mjs smoke      # real server against the fixture: 16 end-to-end checks
 node .claude/skills/run-matt-skills-ui/driver.mjs smoke --shots   # plus a screenshot per theme
 node .claude/skills/run-matt-skills-ui/driver.mjs spawn      # plus a real headless agent (Haiku, about $0.10)
 node .claude/skills/run-matt-skills-ui/driver.mjs spawn --agent codex   # same with opencode | codex | cursor | gemini | pi
