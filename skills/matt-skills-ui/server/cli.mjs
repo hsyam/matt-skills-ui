@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // matt-skills-ui CLI. One server per repo; state under ~/.matt-skills-ui/repos/<hash>/.
-//   start [--no-open] [--session <id>]   start (or reuse) the board and print its URL
+//   start [--no-open] [--session <id>] [--host <agent>]   start (or reuse) the board and print its URL.
+//        --host names the agent that ran it (claude, opencode, codex…); only Claude Code can listen.
 //   status | url | stop
 //   theme <swiss|terminal|transit|toybox|default>
 //   listen                               stream board messages for the main session (use with Monitor)
@@ -17,7 +18,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 const flag = k => { const i = argv.indexOf('--' + k); if (i < 0) return undefined; const v = argv[i + 1]; argv.splice(i, v && !v.startsWith('--') ? 2 : 1); return v && !v.startsWith('--') ? v : true; };
 const repo = path.resolve(String(flag('repo') || process.cwd()));
-const session = flag('session'), noOpen = flag('no-open'), port = flag('port');
+const session = flag('session'), noOpen = flag('no-open'), port = flag('port'), host = flag('host');
 const rec = flag('rec'), options = flag('options'), ref = flag('ref');
 const COMMANDS = ['start', 'status', 'url', 'stop', 'theme', 'listen', 'ask', 'open'];
 const pos = argv.filter(a => !a.startsWith('--') && !a.includes('${') && !/^\$\w+$/.test(a));
@@ -47,11 +48,12 @@ async function start() {
     const log = openSync(path.join(DATA, 'server.log'), 'a');
     const args = [path.join(here, 'server.mjs'), '--repo', repo];
     if (session && session !== true) args.push('--session', String(session));
+    if (host && host !== true) args.push('--host', String(host));
     if (port) args.push('--port', String(port));
     spawn(process.execPath, args, { detached: true, stdio: ['ignore', log, log], cwd: repo }).unref();
     for (let i = 0; i < 100 && !(sj = await current()); i++) await new Promise(r => setTimeout(r, 100));
     if (!sj) { console.error(`matt-skills-ui: server did not start. See ${path.join(DATA, 'server.log')}`); process.exit(1); }
-  } else if (session && session !== true) await api(sj, '/api/main', { method: 'POST', body: { session } });
+  } else if ((session && session !== true) || (host && host !== true)) await api(sj, '/api/main', { method: 'POST', body: { session: session === true ? null : session, host: host === true ? null : host } });
   const theme = (await readTheme()).current;
   console.log(`Matt Skills UI ${reused ? 'is already running' : 'started'} for ${repo}`);
   console.log(`URL: ${sj.url}`);

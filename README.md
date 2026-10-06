@@ -1,6 +1,6 @@
 # Matt Skills UI
 
-**A live web board for [mattpocock/skills](https://github.com/mattpocock/skills), as a Claude Code plugin.**
+**A live web board for [mattpocock/skills](https://github.com/mattpocock/skills), as a Claude Code plugin or a skill for any agent.**
 Type `/matt-skills-ui` and your browser opens on everything those skills have written in your repo: specs, tickets and wayfinder maps drawn as a dependency graph, what's blocked and what's ready, and the exact next command for each item. From the same page you can spawn background agents and answer their questions.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-black.svg)](LICENSE)
@@ -43,7 +43,7 @@ Matt Skills UI turns that state into a board, and the board stays in sync becaus
 - **Swimlane board**: one lane per effort, with columns *Not yet specified → Blocked → Ready → In progress → Your move → Done*. Hover a ticket to draw lines to what blocks it and what it unblocks.
 - **Ledger**: a table of the same tickets, which also flags blocked-by cycles.
 - **Next command for everything**, worked out from the skills' own flow (`/to-tickets`, `/implement`, `/implement-spec`, `/wayfinder`, `/to-spec`, `/triage`, `/code-review`…). Every suggestion has **Send to main**, **Spawn agent** and **Copy** buttons.
-- **Spawn background agents** (headless `claude -p`), each optionally in its own git worktree. Their logs stream live into the dock, and you can reply to them.
+- **Spawn background agents** with Claude Code, OpenCode or Codex (Cursor, Gemini CLI and Pi too, untested), each optionally in its own git worktree. Their logs stream live into the dock, and you can reply to them.
 - **Questions for you**: when an agent asks for a decision, it appears with its recommended answer, and one click accepts it. Questions from your main session appear here too.
 - **Message your main session** from the browser. Your text arrives in the Claude Code session that opened the board, as if you typed it.
 - **Context gauges** for every session, marked at the ~150k "smart zone".
@@ -69,7 +69,7 @@ You pick a theme when you install the plugin and can change it at any time. Ever
 
 | What | Why |
 |---|---|
-| [Claude Code](https://code.claude.com) 2.1.271 or newer | Plugin options with a fixed choice list (the theme picker) need 2.1.271+. Tested on 2.1.290. |
+| [Claude Code](https://code.claude.com) 2.1.271 or newer, **or** any agent that reads skills | For the plugin: options with a fixed choice list (the theme picker) need 2.1.271+. Tested on 2.1.290. As a skill: tested with OpenCode 1.18; it follows the [Agent Skills](https://agentskills.io) format, so Codex, Cursor, Pi, Gemini CLI, Antigravity and others should work too. |
 | Node.js 20+ | Runs the board server. Nothing to `npm install`. |
 | [mattpocock/skills](https://github.com/mattpocock/skills) | The board shows what these skills write. |
 | `gh`, logged in | Only if your issue tracker is GitHub. |
@@ -140,6 +140,29 @@ The command will:
 
 That's it. Keep the session open while you use the board; it's the "main session" the board talks to.
 
+### Other agents: OpenCode, Codex, Cursor, Pi, Gemini CLI, Antigravity…
+
+Install it as a skill with [skills.sh](https://skills.sh), the same way you installed Matt's skills:
+
+```bash
+npx skills add hsyam/matt-skills-ui
+```
+
+The board's code comes along inside the skill folder. Then ask your agent to open it, for example "use the matt-skills-ui skill", or `/matt-skills-ui` in agents that turn skills into commands. It also takes `stop`, `status` and `theme <name>`.
+
+What differs from Claude Code:
+
+| | Claude Code | Other agents |
+|---|---|---|
+| Board, graph, triage, setup health | ✅ | ✅ |
+| Spawn background agents and answer them | ✅ | ✅ |
+| **Send to main** and messages from the board | ✅ arrive in your session | Become **Copy**: paste the command into your agent yourself |
+| Your session's questions mirrored to the board | ✅ | — |
+| Main-session context gauge | ✅ | — |
+| Theme chosen at install | Plugin option | Use the board's ◐ Theme button |
+
+Only Claude Code has a tool that can stream board messages into a running chat, so the rest are left out rather than half-working.
+
 ### Try it without installing
 
 Clone the repo and load it for one session:
@@ -180,9 +203,22 @@ The board recommends the step the skills' own flow calls for:
 
 ### Send to main, Spawn agent, or Copy
 
-- **Send to main** delivers the command to the Claude Code session that opened the board, as if you typed it there.
+- **Send to main** delivers the command to the Claude Code session that opened the board, as if you typed it there. When another agent opened the board, this button isn't shown and other Send buttons copy instead.
 - **Spawn agent** starts a separate background session. A dialog lets you edit the prompt and choose:
-  - **Permission mode.** Background agents can't stop to ask you for permission, so anything your settings don't already allow is denied. Pick accordingly:
+  - **Agent.** Any of these CLIs found on your `PATH`. The board remembers your last pick.
+
+    | Agent | Runs | Follow-up replies | Status |
+    |---|---|---|---|
+    | Claude Code | `claude -p` (stream-json) | stdin of the same process | tested |
+    | OpenCode | `opencode run --format json` | `opencode run -s <session>` | tested (1.18) |
+    | Codex | `codex exec --json` | `codex exec resume <thread>` | tested (0.156) |
+    | Cursor | `cursor-agent --print --output-format stream-json` | `--resume <chat>` | untested |
+    | Gemini CLI | `gemini --output-format stream-json -p` | `--resume <session>` | untested |
+    | Pi | `pi -p --mode json --session <file>` | the same session file | untested |
+
+    Every agent except Claude runs one process per turn and resumes its session for the next one. So these sessions also survive a board restart: reply and they pick up where they stopped. A prompt like `/implement 03` reaches non-Claude agents as "use the `implement` skill", so they need Matt's skills installed where they look (`.agents/skills` works for most).
+    "Untested" means the adapter follows that CLI's documentation but hasn't been run against the real CLI. Reports welcome.
+  - **Mode.** Background agents can't stop to ask you for permission, so anything not already allowed is denied. Each agent has its own modes; the dialog explains them. For Claude Code:
 
     | Mode | Use for |
     |---|---|
@@ -190,6 +226,8 @@ The board recommends the step the skills' own flow calls for:
     | `auto` | Letting Claude decide what's safe |
     | `plan` | Read-only research and exploration |
     | `default` | Only what your settings already allow |
+
+    OpenCode has `build` (your config's permissions), `auto` and `plan`; Codex has `workspace-write`, `read-only` and `full-access`; Cursor has `force`, `default` and `plan`; Gemini has `auto_edit`, `default` and `yolo`. Pi has no permission system, so it can run anything.
 
   - **Own git worktree** (on by default for `/implement`), so parallel agents don't trip over each other. Each worktree gets its own branch, `msu/<agent>`.
 - **Copy** puts the command on your clipboard.
@@ -218,7 +256,7 @@ The agent continues as soon as you answer. Your main session posts its questions
 
 | Command | What it does |
 |---|---|
-| `/matt-skills-ui` | Start or reuse the board for this repo, open it, and listen for board messages |
+| `/matt-skills-ui` | Start or reuse the board for this repo, open it, and (in Claude Code) listen for board messages |
 | `/matt-skills-ui status` | Show whether it's running, plus counts of efforts, issues, sessions and questions |
 | `/matt-skills-ui stop` | Stop the board, along with any agents it spawned |
 | `/matt-skills-ui theme <name>` | Switch to `swiss`, `terminal`, `transit` or `toybox` |
@@ -263,7 +301,7 @@ It never writes to your repo. The only exception is git worktrees for agents you
 Environment variables:
 
 - `MATT_SKILLS_UI_HOME` moves the data folder (handy for testing).
-- `MATT_SKILLS_UI_CLAUDE` points at a different `claude` binary for spawned agents.
+- `MATT_SKILLS_UI_<AGENT>_BIN` points at a different binary for spawned agents, for example `MATT_SKILLS_UI_CODEX_BIN=/opt/codex`. Agents are `CLAUDE`, `OPENCODE`, `CODEX`, `CURSOR`, `GEMINI` and `PI`. `MATT_SKILLS_UI_CLAUDE` still works too.
 
 ## Security
 
@@ -289,7 +327,7 @@ Run `gh auth status` in the repo. The board uses your `gh` login and only reads;
 <details>
 <summary><b>A spawned agent stops with permission errors</b></summary>
 
-Background agents can't ask for permission. Spawn again with `acceptEdits` or `auto`, or allow the commands it needs in your Claude Code settings.
+Background agents can't ask for permission. Spawn again with a mode that allows edits (`acceptEdits` or `auto` for Claude, `auto` for OpenCode, `workspace-write` for Codex), or allow the commands it needs in that agent's own settings. OpenCode's denials show in the log as "OpenCode denied …".
 </details>
 
 <details>
@@ -319,16 +357,16 @@ git branch -D msu/<agent>
 ## FAQ
 
 **Does it change my repo or my issues?**
-No. It only reads. Changes happen only when you send or spawn commands, and then Claude does the work, under the permission mode you chose.
+No. It only reads. Changes happen only when you send or spawn commands, and then the agent does the work, under the mode you chose.
 
 **What does it cost?**
-The board itself is free. Spawned agents are normal Claude Code sessions billed to your account, and the dock shows each one's cost.
+The board itself is free. Spawned agents are normal sessions of that agent, billed to your account. The dock shows the cost when the CLI reports it (Claude Code, OpenCode, Pi).
 
 **Can I keep working in the terminal?**
 Yes. The board and the terminal see the same files. Answers typed in either place count.
 
 **Does it work with Codex or other agents?**
-The board reads the same files no matter which agent wrote them. Spawning agents and messaging the main session currently need Claude Code.
+Yes. Install it with `npx skills add hsyam/matt-skills-ui` and any agent that reads skills can open the board (see [Other agents](#other-agents-opencode-codex-cursor-pi-gemini-cli-antigravity)). From the board you can spawn Claude Code, OpenCode and Codex agents (Cursor, Gemini CLI and Pi untested). Only messaging the main session needs Claude Code.
 
 **Does it work offline?**
 Yes, apart from the web fonts, which load from Google Fonts and fall back to system fonts when offline.
@@ -339,9 +377,9 @@ No build step and no dependencies. Project layout:
 
 ```
 .claude-plugin/          plugin.json (manifest, theme option) and marketplace.json
-skills/matt-skills-ui/   the /matt-skills-ui command
-server/                  cli.mjs, server.mjs, and lib/ (local, GitHub and GitLab readers, setup scan, sessions)
-web/                     index.html, app.js (UI), engine.mjs (next-move logic, shared with tests), style.css (all four themes)
+skills/matt-skills-ui/   the skill (SKILL.md), with the board inside it so `npx skills add` copies everything:
+  server/                cli.mjs, server.mjs, and lib/ (local, GitHub and GitLab readers, setup scan, sessions, agent adapters)
+  web/                   index.html, app.js (UI), engine.mjs (next-move logic, shared with tests), style.css (all four themes)
 test/                    unit tests and fixtures/acme-local (a repo in the skills' exact formats)
 .claude/skills/run-matt-skills-ui/   driver for agents: smoke tests, screenshots, real spawn test
 docs/                    screenshots and design history
@@ -351,9 +389,10 @@ Common commands:
 
 ```bash
 npm test                                                     # unit tests
-node .claude/skills/run-matt-skills-ui/driver.mjs smoke      # real server against the fixture: 13 end-to-end checks
+node .claude/skills/run-matt-skills-ui/driver.mjs smoke      # real server against the fixture: 16 end-to-end checks
 node .claude/skills/run-matt-skills-ui/driver.mjs smoke --shots   # plus a screenshot per theme
 node .claude/skills/run-matt-skills-ui/driver.mjs spawn      # plus a real headless agent (Haiku, about $0.10)
+node .claude/skills/run-matt-skills-ui/driver.mjs spawn --agent codex   # same with opencode | codex | cursor | gemini | pi
 npm run validate                                             # claude plugin validate
 claude --plugin-dir .                                        # try the command in a session
 ```
