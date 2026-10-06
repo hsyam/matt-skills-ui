@@ -1,9 +1,11 @@
 ---
 name: run-matt-skills-ui
 description: Run, test, screenshot or smoke-test the matt-skills-ui plugin (the web board for mattpocock/skills). Use to start the board server, check a change works in the real UI, or take screenshots of its four themes.
+metadata:
+  internal: true
 ---
 
-matt-skills-ui is a Claude Code plugin: a zero-dependency Node server (`server/`) plus a static web app (`web/`). Drive it with `driver.mjs` in this folder: it copies `test/fixtures/acme-local` (a repo in the exact formats mattpocock/skills writes) to a temp dir, starts the real server there, and talks to it over HTTP and the CLI. Paths below are relative to the plugin root (`matt-skills-ui/`).
+matt-skills-ui is a Claude Code plugin and a portable skill: a zero-dependency Node server (`skills/matt-skills-ui/server/`) plus a static web app (`skills/matt-skills-ui/web/`), both inside the skill folder so `npx skills add` copies them. Drive it with `driver.mjs` in this folder: it copies `test/fixtures/acme-local` (a repo in the exact formats mattpocock/skills writes) to a temp dir, starts the real server there, and talks to it over HTTP and the CLI. Paths below are relative to the plugin root (`matt-skills-ui/`).
 
 ## Prerequisites
 
@@ -12,7 +14,7 @@ Node ≥ 20 (tested on 24). No `npm install`. Screenshots use Playwright's `chro
 ## Run (agent path)
 
 ```bash
-node .claude/skills/run-matt-skills-ui/driver.mjs smoke            # 13 API + CLI checks, ~10 s, free
+node .claude/skills/run-matt-skills-ui/driver.mjs smoke            # 16 API + CLI checks, ~10 s, free
 node .claude/skills/run-matt-skills-ui/driver.mjs smoke --shots    # + one PNG per theme in $TMPDIR/matt-skills-ui-shots/
 node .claude/skills/run-matt-skills-ui/driver.mjs spawn            # + a real headless claude agent (haiku, plan mode, ~$0.10)
 node .claude/skills/run-matt-skills-ui/driver.mjs spawn --agent opencode   # same through opencode | codex | cursor | gemini | pi, read-only mode
